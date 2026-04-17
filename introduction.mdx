@@ -1,0 +1,46 @@
+---
+title: "Introduction to Hermes Web UI"
+description: "Hermes Web UI is a full-featured web dashboard for Hermes Agent, providing AI chat, channel management, analytics, scheduled jobs, and a built-in terminal."
+---
+
+Hermes Web UI is a full-featured web dashboard for [Hermes Agent](https://github.com/NousResearch/hermes-agent), a multi-platform AI chat system. It runs as a local BFF (Backend for Frontend) server on port 8648 and gives you a clean, responsive interface to manage chat sessions, configure platform channels, monitor usage and costs, schedule cron jobs, browse skills, and access an integrated web terminal — all without leaving your browser.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="AI Chat" icon="message" href="/features/chat">
+    Real-time streaming via SSE, multi-session management, markdown rendering with syntax highlighting, file upload, and a global model selector that auto-discovers providers from your credential pool.
+  </Card>
+  <Card title="Platform Channels" icon="plug" href="/features/channels">
+    Unified configuration for eight platforms — Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeChat, and WeCom — with per-platform status detection and auto gateway restart on change.
+  </Card>
+  <Card title="Scheduled Jobs" icon="clock" href="/features/scheduled-jobs">
+    Create, edit, pause, resume, and delete cron jobs. Trigger immediate execution and use quick presets for common cron expressions.
+  </Card>
+  <Card title="Usage Analytics" icon="chart-bar" href="/features/usage-analytics">
+    Token usage breakdown by input and output, estimated cost tracking, cache hit rate, model distribution chart, and a 30-day daily trend with data table.
+  </Card>
+  <Card title="Model Management" icon="microchip" href="/features/models">
+    Auto-discover models from your credential pool at `~/.hermes/auth.json`, fetch available models from each provider's `/v1/models` endpoint, and add custom OpenAI-compatible providers.
+  </Card>
+  <Card title="Skills & Memory" icon="brain" href="/features/skills-memory">
+    Browse and search installed skills, view skill details and attached files, and manage user notes and profile settings.
+  </Card>
+  <Card title="Logs" icon="file-lines" href="/features/logs">
+    View agent, gateway, and error logs with filtering by log level, log file, and keyword. Structured log parsing with HTTP access log highlighting.
+  </Card>
+  <Card title="Web Terminal" icon="terminal" href="/features/terminal">
+    Integrated terminal powered by node-pty and @xterm/xterm with multi-session support, real-time keyboard input, PTY output streaming over WebSocket, and window resize support.
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before installing Hermes Web UI, make sure you have the following:
+
+- **Node.js 18 or later** — the server and CLI require a modern Node.js runtime.
+- **Hermes Agent** — the `hermes` CLI must be installed and available on your `$PATH`. The BFF server wraps Hermes CLI commands for session management, log reading, and gateway control.
+
+<Note>
+  Hermes Web UI auto-detects whether the Hermes gateway is running and starts it in the background if needed. You do not need to start the gateway manually before launching the web UI.
+</Note>

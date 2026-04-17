@@ -1,0 +1,211 @@
+---
+title: "Extending Hermes Web UI with new pages and APIs"
+description: "Add new dashboard pages, API endpoints, and Pinia stores to Hermes Web UI following the multi-agent namespace conventions used throughout the codebase."
+---
+
+Hermes Web UI is designed for multi-agent extensibility. All Hermes-specific code lives under `hermes/` subdirectories at every layer — API, components, views, stores, and server routes — making it straightforward to add new pages, endpoints, or even entirely new agent integrations without touching shared code.
+
+## Namespace conventions
+
+| Layer | Path pattern | Example |
+|---|---|---|
+| Frontend API | `packages/client/src/api/hermes/*.ts` | `api/hermes/jobs.ts` |
+| Vue views | `packages/client/src/views/hermes/*.vue` | `views/hermes/JobsView.vue` |
+| Components | `packages/client/src/components/hermes/*/*.vue` | `components/hermes/jobs/JobCard.vue` |
+| Pinia stores | `packages/client/src/stores/hermes/*.ts` | `stores/hermes/jobs.ts` |
+| Server routes | `packages/server/src/routes/hermes/*.ts` | `routes/hermes/sessions.ts` |
+| Route names | `hermes.{page}` | `hermes.jobs` |
+| Route paths | `/hermes/{page}` | `/hermes/jobs` |
+| API paths (local BFF) | `/api/hermes/{resource}` | `/api/hermes/sessions` |
+| API paths (gateway proxy) | `/api/hermes/v1/*`, `/api/hermes/jobs/*` | `/api/hermes/v1/runs` |
+
+## Adding a new page
+
+<Steps>
+  <Step title="Create the view component">
+    Create `packages/client/src/views/hermes/MyView.vue` using `<script setup lang="ts">` with the Composition API:
+
+    ```vue
+    <script setup lang="ts">
+    import { onMounted } from 'vue'
+    import { useI18n } from 'vue-i18n'
+
+    const { t } = useI18n()
+
+    onMounted(() => {
+      // load data
+    })
+    </script>
+
+    <template>
+      <div class="my-view">
+        <h2>{{ t('myFeature.title') }}</h2>
+      </div>
+    </template>
+
+    <style scoped lang="scss">
+    @use '@/styles/variables' as *;
+
+    .my-view {
+      padding: 24px;
+    }
+    </style>
+    ```
+  </Step>
+  <Step title="Register the route">
+    Add the route to `packages/client/src/router/index.ts`. Use `hermes.{page}` as the name and `/hermes/{page}` as the path:
+
+    ```ts
+    {
+      path: '/hermes/my-feature',
+      name: 'hermes.myFeature',
+      component: () => import('@/views/hermes/MyView.vue'),
+    }
+    ```
+
+    All non-public routes require a valid auth token. The router guard in `beforeEach` redirects unauthenticated users to the login page automatically.
+  </Step>
+  <Step title="Add a sidebar entry">
+    Open `packages/client/src/components/layout/AppSidebar.vue` and add a navigation item that calls `handleNav('hermes.myFeature')`.
+  </Step>
+  <Step title="Add i18n keys">
+    Add translation strings to both locale files. The key structure is a nested object organized by feature:
+
+    ```ts
+    // packages/client/src/i18n/locales/en.ts
+    myFeature: {
+      title: 'My Feature',
+    }
+    ```
+
+    ```ts
+    // packages/client/src/i18n/locales/zh.ts
+    myFeature: {
+      title: '我的功能',
+    }
+    ```
+  </Step>
+</Steps>
+
+## Adding a new API endpoint
+
+<Steps>
+  <Step title="Add the route handler">
+    Add the handler to an existing module in `packages/server/src/routes/hermes/`, or create a new file. Export a `Router` instance:
+
+    ```ts
+    import Router from '@koa/router'
+
+    export const myRoutes = new Router()
+
+    myRoutes.get('/api/hermes/my-resource', async (ctx) => {
+      ctx.body = { items: [] }
+    })
+    ```
+
+    Use `:id` for single-segment parameters and `{*name}` for wildcards (the project uses `@koa/router` v15 with path-to-regexp v8 — avoid `(.*)` regex groups).
+  </Step>
+  <Step title="Wrap the Hermes CLI if needed">
+    If the endpoint needs to call the `hermes` CLI, add a wrapper function to `packages/server/src/services/hermes-cli.ts`:
+
+    ```ts
+    export async function myCliCommand(arg: string): Promise<string> {
+      const { stdout } = await execFileAsync('hermes', ['subcommand', arg], {
+        timeout: 30000,
+      })
+      return stdout.trim()
+    }
+    ```
+  </Step>
+  <Step title="Register the route">
+    Open `packages/server/src/routes/hermes/index.ts` and add your router:
+
+    ```ts
+    import { myRoutes } from './my-module'
+
+    hermesRoutes.use(myRoutes.routes())
+    ```
+
+    <Warning>
+      Local endpoints must be registered **before** the proxy catch-all. The route `proxyRoutes.all('/api/hermes/{*any}')` matches every `/api/hermes/*` path, so any handler registered after it is unreachable. Check `packages/server/src/index.ts` for the registration order.
+    </Warning>
+  </Step>
+  <Step title="Add the frontend API function">
+    Create or extend a module in `packages/client/src/api/hermes/`. Use the shared `request` helper from `api/client.ts`:
+
+    ```ts
+    import { request } from '../client'
+
+    export async function fetchMyResource(): Promise<MyItem[]> {
+      const res = await request<{ items: MyItem[] }>('/api/hermes/my-resource')
+      return res.items
+    }
+    ```
+
+    The `request` helper automatically attaches the `Authorization: Bearer` header and redirects to the login page on a 401 response.
+  </Step>
+</Steps>
+
+## API path routing rules
+
+Understanding which requests are handled locally and which are proxied is important when adding endpoints:
+
+<CardGroup cols={2}>
+  <Card title="Local BFF endpoints" icon="server">
+    Paths like `/api/hermes/sessions`, `/api/hermes/config`, `/api/hermes/logs` — handled by Koa route modules, may call the Hermes CLI directly.
+  </Card>
+  <Card title="Gateway proxy endpoints" icon="arrow-right-left">
+    Paths `/api/hermes/v1/*` and `/api/hermes/jobs/*` — forwarded to the upstream Hermes gateway at `UPSTREAM`. The prefix is rewritten: `/api/hermes/v1/` becomes `/v1/`.
+  </Card>
+</CardGroup>
+
+Any `/api/hermes/*` path not matched by an explicit route falls through to the proxy middleware automatically.
+
+## Adding a Pinia store
+
+Create `packages/client/src/stores/hermes/myFeature.ts` using the setup store syntax:
+
+```ts
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { fetchMyResource } from '@/api/hermes/my-module'
+
+export const useMyFeatureStore = defineStore('hermes.myFeature', () => {
+  const items = ref<MyItem[]>([])
+  const loading = ref(false)
+
+  async function load() {
+    loading.value = true
+    try {
+      items.value = await fetchMyResource()
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { items, loading, load }
+})
+```
+
+Existing stores in `packages/client/src/stores/hermes/`: `app`, `chat`, `jobs`, `models`, `settings`, `usage`.
+
+## Adding a new agent integration
+
+The same namespace pattern applies at scale. To add a second agent alongside Hermes:
+
+<Steps>
+  <Step title="Create the directory structure">
+    Mirror the `hermes/` directories for your new agent:
+    - `packages/client/src/api/{agent}/`
+    - `packages/client/src/components/{agent}/`
+    - `packages/client/src/views/{agent}/`
+    - `packages/client/src/stores/{agent}/`
+    - `packages/server/src/routes/{agent}/`
+  </Step>
+  <Step title="Register routes and navigation">
+    Add routes with `path: '/{agent}/*'` and `name: '{agent}.*'` to the router, and add sidebar navigation entries.
+  </Step>
+  <Step title="Register server routes">
+    Aggregate the new agent's route modules in a `routes/{agent}/index.ts` file, then register it in `packages/server/src/index.ts` before the proxy middleware.
+  </Step>
+</Steps>

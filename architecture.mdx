@@ -1,0 +1,123 @@
+---
+title: "Architecture: How Hermes Web UI is structured"
+description: "Learn how the Browser, BFF server, and Hermes Gateway fit together, and how the frontend and backend are organized for multi-agent extensibility."
+---
+
+Hermes Web UI is built around a Backend for Frontend (BFF) pattern. A Koa 2 server runs locally on port 8648 and acts as the single entry point for the browser. It handles authentication, config management, session CRUD, log reading, and terminal I/O directly, while forwarding chat, jobs, and model API calls upstream to the Hermes Gateway on port 8642.
+
+## System overview
+
+```
+Browser → BFF (Koa, :8648) → Hermes Gateway (:8642)
+                ↓
+           Hermes CLI (sessions, logs, version)
+                ↓
+           ~/.hermes/config.yaml  (channel behavior)
+           ~/.hermes/auth.json    (credential pool)
+           Tencent iLink API      (WeChat QR login)
+```
+
+The browser never communicates with the Hermes Gateway directly. All requests go through the BFF, which rewrites paths and forwards them:
+
+- `/api/hermes/v1/*` → `/v1/*` on the upstream gateway
+- `/api/hermes/*` → `/api/*` on the upstream gateway
+
+Requests matched by locally-registered Koa routes are handled within the BFF and are never forwarded.
+
+## BFF layer
+
+The BFF server (`packages/server/src/index.ts`) bootstraps with the following sequence:
+
+<Steps>
+  <Step title="Create directories">
+    Creates the upload directory (`/tmp/hermes-uploads` by default) and the data directory at `dist/server/data`.
+  </Step>
+  <Step title="Load auth middleware">
+    Reads the auth token from `dist/server/data/.token` or the `AUTH_TOKEN` environment variable, then registers the `authMiddleware` that validates `Authorization: Bearer` headers on all `/api/*` requests.
+  </Step>
+  <Step title="Patch config and start gateway">
+    Calls `ensureApiServerConfig()` to validate and fill `~/.hermes/config.yaml`, then calls `ensureGatewayRunning()` to start the Hermes Gateway in the background if it is not already running.
+  </Step>
+  <Step title="Register route modules">
+    Mounts CORS, body parser, webhook routes, upload routes, the Hermes route aggregate, and the catch-all proxy middleware in order.
+  </Step>
+  <Step title="Serve the SPA">
+    Serves the compiled frontend from `dist/client` and falls back to `index.html` for any path that is not an API route.
+  </Step>
+  <Step title="Attach WebSocket terminal">
+    Binds the node-pty WebSocket handler to the running HTTP server to support the integrated terminal.
+  </Step>
+</Steps>
+
+### BFF responsibilities
+
+<AccordionGroup>
+  <Accordion title="API proxy and SSE streaming">
+    Unmatched `/api/hermes/*` and `/v1/*` requests are forwarded to `http://127.0.0.1:8642` with path rewriting. Server-Sent Events for chat streaming are proxied transparently, preserving the chunked transfer encoding.
+  </Accordion>
+  <Accordion title="Session CRUD via CLI">
+    Session listing, renaming, and deletion are performed by the `hermes-cli.ts` service, which shells out to `child_process.execFile('hermes', [...args])`. Session data is parsed from newline-delimited JSON output.
+  </Accordion>
+  <Accordion title="Config and credential management">
+    Channel behavior settings are read from and written to `~/.hermes/config.yaml`. Platform credentials (bot tokens, app secrets) are written to `~/.hermes/.env`. The gateway is restarted automatically after any config change.
+  </Accordion>
+  <Accordion title="WeChat QR login">
+    The `weixin.ts` route module handles the WeChat QR code login flow via the Tencent iLink API, saves the resulting credentials to `~/.hermes/.env`, and notifies the frontend when login is complete.
+  </Accordion>
+  <Accordion title="Model discovery">
+    The `filesystem.ts` route reads `~/.hermes/auth.json` to enumerate configured providers, then fetches `/v1/models` from each provider endpoint to build the available model list.
+  </Accordion>
+  <Accordion title="Skills and memory management">
+    Skills are read from the filesystem and exposed via `/api/hermes/skills`. User notes and profile data are managed through the same route module.
+  </Accordion>
+  <Accordion title="Log reading">
+    The `logs.ts` route lists available log files and streams their contents. Log entries are parsed for level, timestamp, and message fields, with special handling for HTTP access log format.
+  </Accordion>
+  <Accordion title="Web terminal">
+    The `terminal.ts` route module manages PTY sessions using `node-pty`. The browser connects via a raw WebSocket at `/api/hermes/terminal` and exchanges JSON control messages for session lifecycle and resize events, with raw strings for keyboard input and PTY output.
+  </Accordion>
+</AccordionGroup>
+
+## Authentication
+
+On first run, the CLI generates a 64-character hex token using `crypto.randomBytes(32)` and writes it to `~/.hermes-web-ui/.token` with permissions `0600`. The token is passed to the server process via the `AUTH_TOKEN` environment variable and stored in `dist/server/data/.token` for subsequent runs.
+
+The browser receives the token embedded in the startup URL (`/#/?token=<token>`), stores it in `localStorage`, and attaches it as an `Authorization: Bearer` header on every API request. The `EventSource` and WebSocket connections pass the token as a `?token=` query parameter because those browser APIs do not support custom headers.
+
+```
+Environment variables that control auth:
+
+AUTH_TOKEN     — use a specific token instead of the auto-generated one
+AUTH_DISABLED  — set to "1" to disable auth entirely (development use)
+```
+
+## Tech stack
+
+<CardGroup cols={2}>
+  <Card title="Frontend" icon="monitor">
+    Vue 3 (Composition API) · TypeScript · Vite · Naive UI · Pinia · Vue Router (hash history) · vue-i18n · SCSS · markdown-it · highlight.js
+  </Card>
+  <Card title="Backend (BFF)" icon="server">
+    Koa 2 · @koa/router v15 · @koa/cors · @koa/bodyparser · koa-static · node-pty · ws
+  </Card>
+</CardGroup>
+
+## Multi-agent extensibility
+
+The frontend is designed so that Hermes-specific code is entirely isolated under `hermes/` subdirectories at every layer. This makes it straightforward to add a second agent integration without touching shared infrastructure.
+
+| Layer | Shared | Hermes (example) |
+|---|---|---|
+| API modules | `api/client.ts` | `api/hermes/*.ts` |
+| Vue components | `components/layout/` | `components/hermes/*/*.vue` |
+| Page views | `views/LoginView.vue` | `views/hermes/*.vue` |
+| Pinia stores | — | `stores/hermes/*.ts` |
+| Router paths | `/` (login) | `/hermes/*` |
+| API paths | `/health`, `/upload` | `/api/hermes/*` |
+| Server routes | — | `routes/hermes/*.ts` |
+
+To add a new agent, create matching subdirectories at each layer, register routes under `/{agent}/*`, and add backend route modules under `routes/{agent}/`.
+
+<Tip>
+  Any route registered in a local Koa route module takes precedence over the catch-all proxy. Register local handlers before `hermesRoutes.routes()` in `bootstrap()` for routes that must not be forwarded upstream.
+</Tip>

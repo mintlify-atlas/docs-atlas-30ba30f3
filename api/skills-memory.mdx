@@ -1,0 +1,255 @@
+---
+title: "Skills & Memory API — browse skills and edit memory"
+description: "Reference for skills and memory endpoints. List categories, read files, toggle skills, and read or write the agent memory, user profile, and soul sections."
+---
+
+Skills and memory endpoints are local BFF endpoints that read from and write to the Hermes data directory on disk. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## Skills
+
+### List all skills
+
+```
+GET /api/hermes/skills
+```
+
+Returns all installed skills organized into categories.
+
+#### Response
+
+<ResponseField name="categories" type="SkillCategory[]">
+  Skills grouped by category.
+
+  <Expandable title="SkillCategory fields">
+    <ResponseField name="name" type="string">Category identifier (e.g. `coding`, `research`).</ResponseField>
+    <ResponseField name="description" type="string">Human-readable description of the category.</ResponseField>
+    <ResponseField name="skills" type="SkillInfo[]">
+      Skills within this category.
+      <Expandable title="SkillInfo fields">
+        <ResponseField name="name" type="string">Skill identifier.</ResponseField>
+        <ResponseField name="description" type="string">Short description of what the skill does.</ResponseField>
+        <ResponseField name="enabled" type="boolean">Whether the skill is currently active. May be absent if the enabled state is unknown.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```bash
+curl http://localhost:8648/api/hermes/skills \
+  -H "Authorization: Bearer <your-token>"
+```
+
+```json
+{
+  "categories": [
+    {
+      "name": "coding",
+      "description": "Development and code-related skills",
+      "skills": [
+        { "name": "git-assistant", "description": "Git workflow helper", "enabled": true }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### Read skill file
+
+```
+GET /api/hermes/skills/:path
+```
+
+Returns the raw Markdown content of a skill file. Use the relative path under the skills directory.
+
+#### Path parameters
+
+<ParamField path="path" type="string" required>
+  Relative path to the skill file (e.g. `coding/git-assistant/SKILL.md`).
+</ParamField>
+
+#### Response
+
+```json
+{ "content": "# Git Assistant\n\n..." }
+```
+
+#### Error responses
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing or invalid token |
+| `403` | Path traversal attempt blocked |
+| `404` | File not found |
+
+#### Example
+
+```bash
+curl "http://localhost:8648/api/hermes/skills/coding/git-assistant/SKILL.md" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+### List skill files
+
+```
+GET /api/hermes/skills/:category/:skill/files
+```
+
+Returns the list of files inside a specific skill's directory.
+
+#### Path parameters
+
+<ParamField path="category" type="string" required>
+  The skill category name.
+</ParamField>
+
+<ParamField path="skill" type="string" required>
+  The skill name within that category.
+</ParamField>
+
+#### Response
+
+<ResponseField name="files" type="SkillFileEntry[]">
+  Files and directories inside the skill folder.
+
+  <Expandable title="SkillFileEntry fields">
+    <ResponseField name="path" type="string">Relative path within the skill directory.</ResponseField>
+    <ResponseField name="name" type="string">Filename.</ResponseField>
+    <ResponseField name="isDir" type="boolean">Whether the entry is a directory.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```bash
+curl "http://localhost:8648/api/hermes/skills/coding/git-assistant/files" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+### Toggle skill
+
+```
+PUT /api/hermes/skills/toggle
+```
+
+Enables or disables a skill.
+
+#### Request body
+
+<ParamField body="name" type="string" required>
+  The skill name to toggle.
+</ParamField>
+
+<ParamField body="enabled" type="boolean" required>
+  `true` to enable the skill, `false` to disable it.
+</ParamField>
+
+#### Response
+
+```json
+{ "success": true }
+```
+
+#### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | `name` or `enabled` is missing |
+| `401` | Missing or invalid token |
+| `500` | Failed to write the toggle state |
+
+#### Example
+
+```bash
+curl -X PUT http://localhost:8648/api/hermes/skills/toggle \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "git-assistant", "enabled": false}'
+```
+
+---
+
+## Memory
+
+The agent has three memory sections stored as Markdown files on disk: `memory` (general facts), `user` (user profile), and `soul` (persona/character). Each section has its own content string and last-modified timestamp.
+
+### Get memory
+
+```
+GET /api/hermes/memory
+```
+
+Returns the current content of all three memory sections along with their modification timestamps.
+
+#### Response
+
+<ResponseField name="memory" type="string">Contents of the `MEMORY.md` file (general agent memory).</ResponseField>
+<ResponseField name="user" type="string">Contents of the `USER.md` file (user profile).</ResponseField>
+<ResponseField name="soul" type="string">Contents of the `SOUL.md` file (agent persona).</ResponseField>
+<ResponseField name="memory_mtime" type="number | null">Last modified timestamp (ms) for `MEMORY.md`, or `null` if the file doesn't exist.</ResponseField>
+<ResponseField name="user_mtime" type="number | null">Last modified timestamp (ms) for `USER.md`, or `null`.</ResponseField>
+<ResponseField name="soul_mtime" type="number | null">Last modified timestamp (ms) for `SOUL.md`, or `null`.</ResponseField>
+
+#### Example
+
+```bash
+curl http://localhost:8648/api/hermes/memory \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+### Save memory section
+
+```
+POST /api/hermes/memory
+```
+
+Writes new content to a memory section, replacing the entire file.
+
+#### Request body
+
+<ParamField body="section" type="'memory' | 'user' | 'soul'" required>
+  Which memory file to overwrite.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The full Markdown content to write to the file.
+</ParamField>
+
+#### Response
+
+```json
+{ "success": true }
+```
+
+#### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | `section` is not one of `memory`, `user`, `soul` |
+| `401` | Missing or invalid token |
+| `500` | Failed to write the file |
+
+#### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/memory \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "section": "user",
+    "content": "# User Profile\n\nPrefers concise answers. Works in TypeScript."
+  }'
+```

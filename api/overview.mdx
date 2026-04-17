@@ -1,0 +1,123 @@
+---
+title: "Hermes Web UI BFF API — overview, auth, and routes"
+description: "Hermes BFF API introduction: base URL, auth model, local versus proxied gateway endpoints, and navigation cards linking to every endpoint reference page."
+---
+
+The Hermes Web UI server exposes a REST API on `http://localhost:8648` (default port). It acts as a backend-for-frontend (BFF) — some endpoints are handled locally by the Koa server, while others are reverse-proxied to the upstream Hermes Agent gateway running on `localhost:8642`.
+
+## Base URL
+
+```
+http://localhost:8648
+```
+
+All paths in this reference are relative to this base URL. If you change the port via the `PORT` environment variable, substitute that port throughout.
+
+## Endpoint categories
+
+The API is split into two categories based on how the server handles them.
+
+### Local BFF endpoints (`/api/hermes/*`)
+
+These are handled directly by the Koa server. They wrap the Hermes CLI, read/write config files on disk, or manage the WebSocket terminal.
+
+| Resource | Base path |
+|---|---|
+| Sessions | `/api/hermes/sessions` |
+| Config | `/api/hermes/config` |
+| Models | `/api/hermes/config/models`, `/api/hermes/available-models` |
+| Skills & memory | `/api/hermes/skills`, `/api/hermes/memory` |
+| Logs | `/api/hermes/logs` |
+| Terminal | `/api/hermes/terminal` (WebSocket) |
+| WeChat | `/api/hermes/weixin` |
+
+### Proxied gateway endpoints
+
+These are forwarded to the upstream Hermes Agent gateway at `http://127.0.0.1:8642`. The BFF rewrites the path before forwarding.
+
+| BFF path | Upstream path |
+|---|---|
+| `/api/hermes/v1/*` | `/v1/*` |
+| `/api/hermes/jobs/*` | (forwarded to jobs service) |
+
+<Note>
+Any `/api/hermes/*` path that does not match a locally registered route is automatically forwarded to the upstream gateway by the proxy middleware. You do not need to contact the gateway directly.
+</Note>
+
+## Authentication
+
+All endpoints require a bearer token except `/health` and `/webhook`. Pass the token in the `Authorization` header for standard HTTP requests, or as a `?token=` query parameter for SSE streams and WebSocket connections.
+
+See the [Authentication](/api/authentication) page for full details.
+
+## Explore the endpoints
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Token format, where to find it, and how to pass it
+  </Card>
+  <Card title="Sessions" icon="message" href="/api/sessions">
+    List, read, rename, and delete chat sessions
+  </Card>
+  <Card title="Chat & streaming" icon="bolt" href="/api/chat">
+    Start runs and stream SSE events in real time
+  </Card>
+  <Card title="Scheduled jobs" icon="clock" href="/api/jobs">
+    Create, update, pause, resume, and trigger jobs
+  </Card>
+  <Card title="Models" icon="brain" href="/api/models">
+    Query available models and manage custom providers
+  </Card>
+  <Card title="Skills & memory" icon="book" href="/api/skills-memory">
+    Browse skills, read skill files, and manage memory sections
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/api/config">
+    Read and write display, agent, and platform config
+  </Card>
+  <Card title="Logs" icon="file-lines" href="/api/logs">
+    List log files and read filtered log entries
+  </Card>
+  <Card title="Terminal" icon="terminal" href="/api/terminal">
+    Interactive shell sessions over WebSocket
+  </Card>
+</CardGroup>
+
+## Other endpoints
+
+### File upload
+
+```
+POST /upload
+```
+
+Accepts a `multipart/form-data` request and saves each uploaded file to the server's upload directory (`/tmp/hermes-uploads` by default). Returns the saved file paths, which you can then include in a chat run request.
+
+**Request:** `Content-Type: multipart/form-data` with one or more file fields.
+
+**Response:**
+
+```json
+{
+  "files": [
+    { "name": "document.pdf", "path": "/tmp/hermes-uploads/a1b2c3d4.pdf" }
+  ]
+}
+```
+
+<Note>
+The `/upload` endpoint requires authentication (bearer token) like all other API endpoints.
+</Note>
+
+### Webhook receiver
+
+```
+POST /webhook
+```
+
+Accepts incoming webhook payloads from external services and forwards them to the Hermes Agent gateway. This endpoint does **not** require authentication — it is designed to receive callbacks from third-party services.
+
+```bash
+curl -X POST http://localhost:8648/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"event": "message", "data": {...}}'
+```

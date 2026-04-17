@@ -1,0 +1,191 @@
+---
+title: "Terminal WebSocket — interactive PTY shell sessions"
+description: "Reference for the Hermes WebSocket terminal. Authenticate via ?token=, create PTY sessions, send input, resize the viewport, and receive raw PTY output."
+---
+
+The terminal endpoint is a WebSocket connection backed by `node-pty`. It gives you a full pseudo-terminal (PTY) in the browser, with support for multiple concurrent shell sessions that you can create, switch between, and close independently.
+
+<Note>
+This is a WebSocket endpoint, not a standard HTTP endpoint. Connect with `ws://` (or `wss://` if behind TLS). The server upgrades the connection on `GET /api/hermes/terminal`.
+</Note>
+
+**WebSocket URL:** `ws://localhost:8648/api/hermes/terminal`
+
+---
+
+## Authentication
+
+Pass your bearer token as a query parameter on the WebSocket upgrade URL. WebSocket connections do not support custom headers at the protocol level.
+
+```
+ws://localhost:8648/api/hermes/terminal?token=<your-token>
+```
+
+If the token is missing or invalid, the server rejects the upgrade with HTTP `401`.
+
+---
+
+## Message format
+
+The WebSocket carries two types of messages in each direction:
+
+- **JSON control messages** — for session management and terminal control
+- **Raw strings** — for keyboard input (client → server) and PTY output (server → client)
+
+When the server sends a message, inspect whether it is valid JSON. If it is, parse it as a control message. If it is not valid JSON, treat it as raw PTY output and write it to the terminal display.
+
+---
+
+## Client → server messages
+
+### Create session
+
+Spawns a new shell process in a PTY. The server responds with a `created` control message.
+
+```json
+{ "type": "create" }
+```
+
+### Switch session
+
+Makes a different PTY session the active one. Subsequent raw output from the server will come from the newly active session.
+
+```json
+{ "type": "switch", "sessionId": "session-uuid" }
+```
+
+<ParamField body="sessionId" type="string" required>
+  The session ID returned in the `created` message.
+</ParamField>
+
+### Close session
+
+Terminates a PTY session and kills its shell process.
+
+```json
+{ "type": "close", "sessionId": "session-uuid" }
+```
+
+<ParamField body="sessionId" type="string" required>
+  The session ID to close.
+</ParamField>
+
+### Resize terminal
+
+Resizes the active session's PTY to match the user's viewport. Send this whenever the terminal container is resized.
+
+```json
+{ "type": "resize", "cols": 220, "rows": 50 }
+```
+
+<ParamField body="cols" type="number" required>
+  New column width of the terminal.
+</ParamField>
+
+<ParamField body="rows" type="number" required>
+  New row height of the terminal.
+</ParamField>
+
+### Keyboard input
+
+Send raw keyboard input directly as a plain string (not JSON). The server forwards it to the active PTY session.
+
+```
+ls -la\r
+```
+
+<Note>
+Use `\r` (carriage return) rather than `\n` for Enter keystrokes. This matches how physical terminals send the Enter key.
+</Note>
+
+---
+
+## Server → client messages
+
+### Session created
+
+Sent after the server successfully spawns a new PTY.
+
+```json
+{
+  "type": "created",
+  "id": "session-uuid",
+  "pid": 12345,
+  "shell": "/bin/zsh"
+}
+```
+
+<ResponseField name="id" type="string">Session ID. Use this in subsequent `switch` and `close` messages.</ResponseField>
+<ResponseField name="pid" type="number">Process ID of the shell process.</ResponseField>
+<ResponseField name="shell" type="string">Path to the shell that was launched (e.g. `/bin/bash`, `/bin/zsh`).</ResponseField>
+
+### Session switched
+
+Confirms that the active session has changed.
+
+```json
+{ "type": "switched", "id": "session-uuid" }
+```
+
+### Session exited
+
+Sent when a shell process terminates.
+
+```json
+{ "type": "exited", "id": "session-uuid", "exitCode": 0 }
+```
+
+<ResponseField name="id" type="string">The session that exited.</ResponseField>
+<ResponseField name="exitCode" type="number">Exit code of the shell process.</ResponseField>
+
+### Error
+
+Sent when the server encounters a problem processing a control message.
+
+```json
+{ "type": "error", "message": "Session not found" }
+```
+
+### PTY output
+
+Any message that is not valid JSON is raw terminal output. Write it to your terminal emulator (e.g. `xterm.js`) directly:
+
+```
+[user@host ~]$ ls -la\r\ndrwxr-xr-x ...
+```
+
+---
+
+## Session lifecycle example
+
+The typical flow for opening a terminal tab:
+
+1. Open the WebSocket connection with `?token=<token>`
+2. Send `{ "type": "create" }` to create the first session
+3. Wait for `{ "type": "created", "id": "...", ... }` to get the session ID
+4. Write subsequent raw PTY output to the terminal display
+5. Send resize messages whenever the container dimensions change
+6. Send raw strings as the user types
+7. Send `{ "type": "close", "sessionId": "..." }` when the tab is closed
+
+For multi-tab support, create additional sessions and use `switch` to route input and output to the correct one.
+
+---
+
+## Example: connect with wscat
+
+```bash
+TOKEN=$(cat ~/.hermes-web-ui/.token)
+
+wscat -c "ws://localhost:8648/api/hermes/terminal?token=${TOKEN}"
+```
+
+Once connected, send a JSON string to create a session:
+
+```
+> {"type":"create"}
+< {"type":"created","id":"a1b2c3d4","pid":9876,"shell":"/bin/bash"}
+< [user@host ~]$
+> ls\r
+< agent.log  config.json  data/
+```

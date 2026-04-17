@@ -1,0 +1,109 @@
+---
+title: "Skills and memory: manage capabilities and agent context"
+description: "Browse and enable installed skills by category, view attached skill files, and manage the three agent memory sections: notes, user profile, and soul."
+---
+
+Hermes Web UI exposes two related but distinct pages for shaping what the agent knows and can do: **Skills** and **Memory**. Skills are modular capability packs the agent loads at runtime; memory is the persistent context the agent carries across conversations.
+
+## Skills
+
+Navigate to **Skills** in the sidebar to browse every skill installed in your Hermes Agent instance.
+
+### Browsing and searching skills
+
+Skills are organized into categories. The left sidebar lists all categories with their descriptions, and clicking a category expands to show the skills inside. A search bar in the top-right filters the list in real time — the query matches against skill names and descriptions across all categories.
+
+On mobile, the sidebar collapses into a slide-over panel. Tap the menu icon in the page header to open it.
+
+### Enabling and disabling skills
+
+Each skill in the list has a toggle. Flipping it sends a `PUT /api/hermes/skills/toggle` request with the skill name and the new enabled state. The change takes effect at the agent level without requiring a restart.
+
+<Warning>
+Disabling a skill removes it from the agent's available tools immediately. If the agent is mid-conversation and the user triggers a disabled skill, the agent will be unable to use it.
+</Warning>
+
+### Viewing skill details and files
+
+Click a skill name to open its detail panel on the right. The panel shows:
+
+- The skill's **description**
+- The skill's **prompt file content** (rendered as markdown)
+- A list of **attached files** — additional data files bundled with the skill
+
+Each file entry shows its path, filename, and whether it is a directory. You can browse the file tree to understand what data the skill has access to.
+
+### Skills data structure
+
+```typescript
+interface SkillInfo {
+  name: string
+  description: string
+  enabled?: boolean    // undefined means the skill has no toggle
+}
+
+interface SkillCategory {
+  name: string
+  description: string
+  skills: SkillInfo[]
+}
+```
+
+---
+
+## Memory
+
+Navigate to **Memory** in the sidebar to view and edit the three sections of agent memory. Memory is stored as text files in the Hermes data directory and is injected into the agent's system prompt on each run.
+
+### Memory sections
+
+The Memory page displays three panels side by side (stacked on mobile), each corresponding to one memory file:
+
+<AccordionGroup>
+  <Accordion title="My notes (memory)">
+    Free-form notes that the agent accumulates over time. The agent may write observations, facts about ongoing tasks, or reminders here. You can edit this section to correct errors or add context.
+
+    Stored in the `memory` field. Last modified time is shown in the panel header.
+  </Accordion>
+  <Accordion title="User profile (user)">
+    Information about you — your name, preferences, communication style, and any background the agent should keep in mind across all conversations. Edit this to update how the agent addresses you.
+
+    Stored in the `user` field. Last modified time is shown in the panel header.
+  </Accordion>
+  <Accordion title="Soul">
+    The agent's core persona and behavioral guidelines. This is typically set once during setup and defines the agent's tone, values, and response style.
+
+    Stored in the `soul` field. Last modified time is shown in the panel header.
+  </Accordion>
+</AccordionGroup>
+
+### Editing a memory section
+
+<Steps>
+  <Step title="Click Edit">
+    Each panel has an **Edit** button in its header. Clicking it replaces the rendered markdown view with a plain-text editor pre-filled with the current content.
+  </Step>
+  <Step title="Make your changes">
+    Edit the text directly. The editor uses a monospace font and supports plain text or markdown — the agent receives the raw text.
+  </Step>
+  <Step title="Save or cancel">
+    Click **Save** to write the changes, or **Cancel** to discard them. Saving sends a `POST /api/hermes/memory` request with the section name and updated content. The view refreshes to show the new rendered content and updated modification time.
+  </Step>
+</Steps>
+
+<Tip>
+Use `§` as a paragraph separator in memory files if you want explicit double-line breaks. The UI replaces `§` with two newlines when rendering.
+</Tip>
+
+### Memory data structure
+
+```typescript
+interface MemoryData {
+  memory: string            // agent notes content
+  user: string              // user profile content
+  soul: string              // agent persona content
+  memory_mtime: number | null  // Unix timestamp of last save
+  user_mtime: number | null
+  soul_mtime: number | null
+}
+```

@@ -1,0 +1,182 @@
+---
+title: "Scheduled Jobs: Cron-Based Automation for Hermes Agent"
+description: "Automate recurring prompts with cron jobs — set schedules, attach skills, deliver to any channel, and monitor run history and errors from the Jobs page."
+---
+
+The Scheduled Jobs page lets you automate recurring tasks by sending prompts to Hermes Agent on a cron schedule. Each job can target a specific delivery channel, attach skills, limit repetition, and be paused or triggered manually — all without leaving the UI.
+
+## Creating a job
+
+Click **Create Job** in the top-right corner of the Jobs page. A modal form opens with all the fields needed to define a new scheduled job.
+
+<Steps>
+  <Step title="Name the job">
+    Enter a short, descriptive name. This appears on the job card and helps you identify the job at a glance in the list.
+  </Step>
+  <Step title="Set the schedule">
+    Enter a cron expression in the **Schedule** field, or pick one from the quick preset dropdown. Common presets include hourly, daily at midnight, every weekday morning, and weekly on Monday.
+
+    ```text
+    # Examples
+    0 * * * *        every hour
+    0 9 * * 1-5      weekdays at 09:00
+    0 0 * * 0        weekly on Sunday midnight
+    */15 * * * *     every 15 minutes
+    ```
+  </Step>
+  <Step title="Write the prompt">
+    Enter the prompt Hermes Agent will receive at each scheduled run. This is the same text you would type in the Chat view, and the agent has access to the same tools and skills.
+  </Step>
+  <Step title="Configure delivery and skills">
+    Optionally set a **Deliver** target (the channel or destination where the agent's response should be sent) and attach one or more **Skills** by name. You can also set a **Repeat** count to limit how many times the job fires before it stops automatically.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The job is created, enabled by default, and appears immediately in the job list with its next scheduled run time.
+  </Step>
+</Steps>
+
+## Job fields reference
+
+<AccordionGroup>
+  <Accordion title="Core fields">
+    | Field | Type | Description |
+    |---|---|---|
+    | `name` | `string` | Display name for the job |
+    | `schedule` | `string` | Cron expression (e.g. `"0 9 * * 1-5"`) |
+    | `prompt` | `string` | The text prompt sent to Hermes Agent on each run |
+    | `deliver` | `string` | Delivery target for the agent's response |
+    | `skills` | `string[]` | Skill names to attach to the run |
+    | `repeat` | `number \| null` | Maximum number of executions; `null` means unlimited |
+  </Accordion>
+  <Accordion title="State fields">
+    | Field | Type | Description |
+    |---|---|---|
+    | `enabled` | `boolean` | Whether the job is active |
+    | `state` | `string` | Current scheduler state (e.g. `"active"`, `"paused"`) |
+    | `paused_at` | `string \| null` | ISO timestamp of when the job was paused |
+    | `paused_reason` | `string \| null` | Optional reason recorded when pausing |
+    | `next_run_at` | `string \| null` | ISO timestamp of the next scheduled execution |
+    | `last_run_at` | `string \| null` | ISO timestamp of the most recent execution |
+    | `last_status` | `string \| null` | Outcome of the last run (e.g. `"success"`, `"error"`) |
+    | `last_error` | `string \| null` | Error message from the last failed run |
+    | `last_delivery_error` | `string \| null` | Error message if the delivery step failed |
+  </Accordion>
+  <Accordion title="Origin fields">
+    Jobs created from a messaging platform carry origin metadata:
+
+    | Field | Type | Description |
+    |---|---|---|
+    | `origin.platform` | `string` | Source platform (e.g. `"telegram"`) |
+    | `origin.chat_id` | `string` | Chat or channel ID on the source platform |
+    | `origin.chat_name` | `string` | Human-readable chat name |
+    | `origin.thread_id` | `string \| null` | Thread ID, if applicable |
+  </Accordion>
+</AccordionGroup>
+
+## The Job interface
+
+The full TypeScript interface used by the API layer:
+
+```typescript
+interface Job {
+  job_id: string
+  id: string
+  name: string
+  prompt: string
+  prompt_preview?: string
+  skills: string[]
+  skill: string | null
+  model: string | null
+  provider: string | null
+  base_url: string | null
+  script: string | null
+  schedule: string | { kind: string; expr: string; display: string }
+  schedule_display: string
+  repeat: string | { times: number | null; completed: number }
+  enabled: boolean
+  state: string
+  paused_at: string | null
+  paused_reason: string | null
+  created_at: string
+  next_run_at: string | null
+  last_run_at: string | null
+  last_status: string | null
+  last_error: string | null
+  deliver: string
+  origin: {
+    platform: string
+    chat_id: string
+    chat_name: string
+    thread_id: string | null
+  } | null
+  last_delivery_error: string | null
+}
+```
+
+## Create and update request shapes
+
+When you save a job in the UI, the form data maps to one of these two request bodies:
+
+<CodeGroup>
+
+```typescript CreateJobRequest
+interface CreateJobRequest {
+  name: string        // required
+  schedule: string    // required — cron expression
+  prompt?: string
+  deliver?: string
+  skills?: string[]
+  repeat?: number
+}
+```
+
+```typescript UpdateJobRequest
+interface UpdateJobRequest {
+  name?: string
+  schedule?: string
+  prompt?: string
+  deliver?: string
+  skills?: string[]
+  skill?: string
+  repeat?: number
+  enabled?: boolean   // use to enable/disable without a separate action
+}
+```
+
+</CodeGroup>
+
+## Managing jobs
+
+Each job card in the list exposes actions through its action menu.
+
+<CardGroup cols={2}>
+  <Card title="Pause and resume" icon="pause">
+    Click **Pause** to halt a job without deleting it. The job card shows the time it was paused. Click **Resume** to re-enable it — the scheduler recalculates the next run time from the current moment.
+  </Card>
+  <Card title="Run now" icon="play">
+    Click **Run now** to trigger an immediate execution outside the normal schedule. This does not reset or shift the scheduled cadence — the next cron-driven run still fires at its usual time.
+  </Card>
+  <Card title="Edit" icon="pencil">
+    Click the edit icon on any job card to open the same form modal used for creation, pre-filled with the job's current values. Save to apply changes immediately.
+  </Card>
+  <Card title="Delete" icon="trash">
+    Click the delete icon and confirm the prompt. The job is removed permanently along with all its history metadata.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Use the **Repeat** field to create one-shot or limited-run jobs. Set `repeat: 1` to fire exactly once at the next scheduled time and then stop automatically.
+</Tip>
+
+## Monitoring job health
+
+The job card surface area tells you everything you need to know without opening the edit modal:
+
+- **Next run at** — the upcoming execution time, displayed as a human-readable relative timestamp.
+- **Last run at** — when the most recent execution started.
+- **Last status** — the outcome badge (`success`, `error`, etc.).
+- **Last error** — a short error message visible directly on the card when the last run failed, so you do not have to dig into logs to identify broken jobs.
+
+<Warning>
+  If `last_delivery_error` is set, the agent ran successfully but the response could not be delivered to the target channel. Check that the delivery target is still reachable and that the relevant platform credentials on the Channels page are valid.
+</Warning>

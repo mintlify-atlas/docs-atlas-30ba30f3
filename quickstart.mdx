@@ -1,80 +1,107 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quickstart: Install and run Hermes Web UI"
+description: "Install Hermes Web UI globally via npm or a one-line setup script, then start the server on port 8648 and open the dashboard in your browser."
 ---
 
-## Get started in three steps
+Hermes Web UI ships as an npm package with a CLI that manages the server as a background daemon. The quickest path is a single `npm install` followed by `hermes-web-ui start`, which launches the BFF server, auto-configures the Hermes gateway connection, and opens the dashboard in your default browser.
 
-Get your documentation site running locally and make your first customization.
+## Install
 
-### Step 1: Set up your local environment
+<Tabs>
+  <Tab title="npm (recommended)">
+    Install the package globally, then start the server:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    npm install -g hermes-web-ui
+    hermes-web-ui start
+    ```
 
-### Step 2: Deploy your changes
+    The server starts on **http://localhost:8648** by default.
+  </Tab>
+  <Tab title="One-line setup script">
+    The setup script auto-detects your OS and installs Node.js if it is missing, then installs `hermes-web-ui`. Supported on Debian, Ubuntu, and macOS:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    bash <(curl -fsSL https://raw.githubusercontent.com/EKKOLearnAI/hermes-web-ui/main/scripts/setup.sh)
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    After the script completes, run:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    hermes-web-ui start
+    ```
+  </Tab>
+  <Tab title="WSL">
+    Run the setup script inside your WSL environment:
 
-### Step 3: Go live
+    ```bash
+    bash <(curl -fsSL https://raw.githubusercontent.com/EKKOLearnAI/hermes-web-ui/main/scripts/setup.sh)
+    hermes-web-ui start
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <Note>
+      WSL auto-detects the environment and uses `hermes gateway run` for background gateway startup instead of launchd or systemd.
+    </Note>
+  </Tab>
+</Tabs>
 
-## Next steps
+## What happens on startup
 
-Now that you have your docs running, explore these key features:
+When you run `hermes-web-ui start`, the CLI:
 
-<CardGroup cols={2}>
+<Steps>
+  <Step title="Resolves port conflicts">
+    Checks whether port 8648 (or your custom port) is already in use and kills any stale processes occupying it.
+  </Step>
+  <Step title="Generates an auth token">
+    Creates a random 64-character hex token and writes it to `~/.hermes-web-ui/.token` with mode `0600`. The token is passed as a `Bearer` header for all API requests. You can override this with the `AUTH_TOKEN` environment variable, or disable auth entirely with `AUTH_DISABLED=1`.
+  </Step>
+  <Step title="Validates and patches config">
+    Reads `~/.hermes/config.yaml`, fills in missing `api_server` fields (host, port, CORS), backs up the original to `config.yaml.bak`, and writes the updated config.
+  </Step>
+  <Step title="Ensures the gateway is running">
+    Checks the Hermes gateway health endpoint at `http://127.0.0.1:8642/health`. If the gateway is not running, the BFF starts it in the background automatically.
+  </Step>
+  <Step title="Polls the health endpoint and opens the browser">
+    Polls `http://127.0.0.1:{port}/health` every 500 ms for up to 30 seconds. Once the server responds with a 200, it prints the dashboard URL with the auth token embedded and opens it in your default browser.
+  </Step>
+</Steps>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## CLI reference
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+| Command | Description |
+|---|---|
+| `hermes-web-ui start` | Start the server in background (daemon mode) |
+| `hermes-web-ui start --port 9000` | Start on a custom port |
+| `hermes-web-ui stop` | Stop the background process |
+| `hermes-web-ui restart` | Restart the background process |
+| `hermes-web-ui status` | Check whether the server is running |
+| `hermes-web-ui update` | Update to the latest version and restart |
+| `hermes-web-ui -v` | Print the installed version |
+| `hermes-web-ui -h` | Print the help message |
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+### Custom port
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+Pass `--port` to start the server on a port other than the default 8648:
 
-</CardGroup>
+```bash
+hermes-web-ui start --port 9000
+```
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+The port value is also accepted as a positional argument:
+
+```bash
+hermes-web-ui start 9000
+```
+
+## Daemon logs
+
+The server runs as a detached background process. Its output is written to `~/.hermes-web-ui/server.log`. If the server fails to start, check this file first:
+
+```bash
+cat ~/.hermes-web-ui/server.log
+```
+
+<Warning>
+  The PID file at `~/.hermes-web-ui/server.pid` tracks the running process. Do not delete it manually while the server is running — this breaks the `stop`, `restart`, and `status` commands.
+</Warning>

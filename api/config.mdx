@@ -1,0 +1,281 @@
+---
+title: "Config API — read and update application settings"
+description: "Reference for config endpoints. Read display, agent, and memory sections, update values, save platform credentials, and manage WeChat QR code login."
+---
+
+Configuration endpoints are local BFF endpoints that read from and write to the Hermes configuration file on disk. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## Get configuration
+
+```
+GET /api/hermes/config
+```
+
+Returns one or more configuration sections. Use query parameters to request only the sections you need.
+
+### Query parameters
+
+<ParamField query="section" type="string">
+  Return a single named section (e.g. `display`). Mutually exclusive with `sections`.
+</ParamField>
+
+<ParamField query="sections" type="string">
+  Comma-separated list of section names to return (e.g. `display,agent,memory`).
+</ParamField>
+
+### Response
+
+Returns an `AppConfig` object containing only the requested sections. All sections are optional; if none is requested, all sections are returned.
+
+<ResponseField name="display" type="DisplayConfig">
+  <Expandable title="DisplayConfig fields">
+    <ResponseField name="compact" type="boolean">Use compact message layout.</ResponseField>
+    <ResponseField name="personality" type="string">Agent personality mode.</ResponseField>
+    <ResponseField name="resume_display" type="string">How to display resumed sessions.</ResponseField>
+    <ResponseField name="busy_input_mode" type="string">Input behavior while the agent is running.</ResponseField>
+    <ResponseField name="bell_on_complete" type="boolean">Play a bell sound when a run completes.</ResponseField>
+    <ResponseField name="show_reasoning" type="boolean">Show extended reasoning tokens in the UI.</ResponseField>
+    <ResponseField name="streaming" type="boolean">Enable streaming output.</ResponseField>
+    <ResponseField name="inline_diffs" type="boolean">Show file diffs inline in messages.</ResponseField>
+    <ResponseField name="show_cost" type="boolean">Display estimated cost per run.</ResponseField>
+    <ResponseField name="skin" type="string">UI theme/skin identifier.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="agent" type="AgentConfig">
+  <Expandable title="AgentConfig fields">
+    <ResponseField name="max_turns" type="number">Maximum agent turns per run.</ResponseField>
+    <ResponseField name="gateway_timeout" type="number">Timeout in seconds for gateway requests.</ResponseField>
+    <ResponseField name="restart_drain_timeout" type="number">Seconds to wait for in-flight runs to drain before restarting.</ResponseField>
+    <ResponseField name="service_tier" type="string">Service tier to request from the provider.</ResponseField>
+    <ResponseField name="tool_use_enforcement" type="string">How strictly to enforce tool use policies.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="memory" type="MemoryConfig">
+  <Expandable title="MemoryConfig fields">
+    <ResponseField name="memory_enabled" type="boolean">Enable automatic memory recall.</ResponseField>
+    <ResponseField name="user_profile_enabled" type="boolean">Enable user profile injection.</ResponseField>
+    <ResponseField name="memory_char_limit" type="number">Maximum characters injected from memory.</ResponseField>
+    <ResponseField name="user_char_limit" type="number">Maximum characters injected from user profile.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="session_reset" type="SessionResetConfig">
+  <Expandable title="SessionResetConfig fields">
+    <ResponseField name="mode" type="string">Reset mode (`idle`, `daily`, or `manual`).</ResponseField>
+    <ResponseField name="idle_minutes" type="number">Minutes of inactivity before resetting (when `mode` is `idle`).</ResponseField>
+    <ResponseField name="at_hour" type="number">Hour of day to reset (when `mode` is `daily`).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="privacy" type="PrivacyConfig">
+  <Expandable title="PrivacyConfig fields">
+    <ResponseField name="redact_pii" type="boolean">Redact personally identifiable information from logs.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="telegram" type="object">Telegram platform configuration.</ResponseField>
+<ResponseField name="discord" type="object">Discord platform configuration.</ResponseField>
+<ResponseField name="slack" type="object">Slack platform configuration.</ResponseField>
+<ResponseField name="whatsapp" type="object">WhatsApp platform configuration.</ResponseField>
+<ResponseField name="matrix" type="object">Matrix platform configuration.</ResponseField>
+<ResponseField name="weixin" type="object">WeChat (Weixin) platform configuration.</ResponseField>
+<ResponseField name="wecom" type="object">WeCom (Enterprise WeChat) configuration.</ResponseField>
+<ResponseField name="feishu" type="object">Feishu/Lark configuration.</ResponseField>
+<ResponseField name="dingtalk" type="object">DingTalk configuration.</ResponseField>
+
+### Example
+
+```bash
+curl "http://localhost:8648/api/hermes/config?sections=display,agent" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Update configuration section
+
+```
+PUT /api/hermes/config
+```
+
+Merges a set of key-value pairs into a named config section. Existing keys not included in `values` are left unchanged.
+
+### Request body
+
+<ParamField body="section" type="string" required>
+  The config section to update (e.g. `display`, `agent`, `telegram`).
+</ParamField>
+
+<ParamField body="values" type="Record<string, any>" required>
+  Key-value pairs to merge into the section.
+</ParamField>
+
+### Response
+
+```json
+{ "success": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | `section` or `values` is missing |
+| `401` | Missing or invalid token |
+| `500` | Failed to write config |
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8648/api/hermes/config \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "section": "display",
+    "values": { "show_cost": true, "streaming": true }
+  }'
+```
+
+---
+
+## Save platform credentials
+
+```
+PUT /api/hermes/config/credentials
+```
+
+Writes credentials for a messaging platform into the config. Values are merged into the platform's credential section.
+
+### Request body
+
+<ParamField body="platform" type="string" required>
+  The platform name. One of: `telegram`, `discord`, `slack`, `whatsapp`, `matrix`, `weixin`, `wecom`, `feishu`, `dingtalk`.
+</ParamField>
+
+<ParamField body="values" type="Record<string, any>" required>
+  Credential key-value pairs. Keys may use dot notation to set nested values (e.g. `extra.app_id`).
+</ParamField>
+
+### Response
+
+```json
+{ "success": true }
+```
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8648/api/hermes/config/credentials \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "telegram",
+    "values": { "token": "1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" }
+  }'
+```
+
+---
+
+## WeChat (Weixin) QR login
+
+WeChat login uses a three-step flow: fetch a QR code, display it to the user, then poll until the user scans it.
+
+### Get QR code
+
+```
+GET /api/hermes/weixin/qrcode
+```
+
+Generates a WeChat login QR code.
+
+#### Response
+
+<ResponseField name="qrcode" type="string">QR code identifier (used when polling status).</ResponseField>
+<ResponseField name="qrcode_url" type="string">QR code image as a base64 data URL. Render this directly in an `<img>` tag.</ResponseField>
+
+#### Example
+
+```bash
+curl http://localhost:8648/api/hermes/weixin/qrcode \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+### Poll QR scan status
+
+```
+GET /api/hermes/weixin/qrcode/status
+```
+
+Polls whether the user has scanned the QR code. Call this every few seconds until `status` is `confirmed`.
+
+#### Query parameters
+
+<ParamField query="qrcode" type="string" required>
+  The QR code identifier returned by the QR code endpoint.
+</ParamField>
+
+#### Response
+
+<ResponseField name="status" type="'wait' | 'scaned' | 'scaned_but_redirect' | 'expired' | 'confirmed'">
+  Current scan state. Keep polling until `confirmed` or `expired`.
+</ResponseField>
+<ResponseField name="account_id" type="string">Bot account ID (present when `confirmed`).</ResponseField>
+<ResponseField name="token" type="string">Bot auth token (present when `confirmed`).</ResponseField>
+<ResponseField name="base_url" type="string">WeChat API base URL (present when `confirmed`).</ResponseField>
+
+#### Example
+
+```bash
+curl "http://localhost:8648/api/hermes/weixin/qrcode/status?qrcode=<qrcode-id>" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+### Save WeChat credentials
+
+```
+POST /api/hermes/weixin/save
+```
+
+Persists the credentials obtained after a successful QR scan. Call this once `status` returns `confirmed`.
+
+#### Request body
+
+<ParamField body="account_id" type="string" required>
+  The bot account ID from the confirmed scan.
+</ParamField>
+
+<ParamField body="token" type="string" required>
+  The bot auth token from the confirmed scan.
+</ParamField>
+
+<ParamField body="base_url" type="string">
+  Optional base URL override for the WeChat API.
+</ParamField>
+
+#### Response
+
+```json
+{ "success": true }
+```
+
+#### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/weixin/save \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": "wx_abc123",
+    "token": "tok_xyz789"
+  }'
+```

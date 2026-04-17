@@ -1,0 +1,275 @@
+---
+title: "Jobs API — create, manage, and trigger scheduled tasks"
+description: "Full reference for the Hermes scheduled jobs endpoints. Create, update, delete, pause, resume, and immediately trigger jobs via the proxied gateway API."
+---
+
+Job endpoints are proxied through the BFF to the upstream Hermes Agent gateway. All requests to `/api/hermes/jobs/*` are forwarded to the jobs service. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## The Job object
+
+Most endpoints return a `Job` object. Its fields are:
+
+<ResponseField name="job_id" type="string">Canonical job ID used in path parameters.</ResponseField>
+<ResponseField name="id" type="string">Alias for `job_id`.</ResponseField>
+<ResponseField name="name" type="string">Human-readable job name.</ResponseField>
+<ResponseField name="prompt" type="string">Full prompt sent to the agent when the job runs.</ResponseField>
+<ResponseField name="prompt_preview" type="string">Truncated prompt for display purposes.</ResponseField>
+<ResponseField name="skills" type="string[]">Names of skills enabled for this job.</ResponseField>
+<ResponseField name="skill" type="string | null">Primary skill (legacy field).</ResponseField>
+<ResponseField name="model" type="string | null">Model override for this job, or `null` to use the default.</ResponseField>
+<ResponseField name="provider" type="string | null">Provider override, or `null`.</ResponseField>
+<ResponseField name="base_url" type="string | null">Custom base URL for the provider, or `null`.</ResponseField>
+<ResponseField name="script" type="string | null">Script path for script-based jobs, or `null`.</ResponseField>
+<ResponseField name="schedule" type="string | object">Cron expression string, or an object with `kind`, `expr`, and `display`.</ResponseField>
+<ResponseField name="schedule_display" type="string">Human-readable schedule description (e.g. "Every day at 09:00").</ResponseField>
+<ResponseField name="repeat" type="string | object">Repeat configuration. String shorthand or object with `times` (max runs, `null` for unlimited) and `completed` (runs so far).</ResponseField>
+<ResponseField name="enabled" type="boolean">Whether the job is active.</ResponseField>
+<ResponseField name="state" type="string">Current execution state (e.g. `idle`, `running`).</ResponseField>
+<ResponseField name="paused_at" type="string | null">ISO timestamp when the job was paused, or `null`.</ResponseField>
+<ResponseField name="paused_reason" type="string | null">Reason the job was paused, or `null`.</ResponseField>
+<ResponseField name="created_at" type="string">ISO timestamp when the job was created.</ResponseField>
+<ResponseField name="next_run_at" type="string | null">ISO timestamp of the next scheduled run.</ResponseField>
+<ResponseField name="last_run_at" type="string | null">ISO timestamp of the most recent run.</ResponseField>
+<ResponseField name="last_status" type="string | null">Status of the last run (e.g. `success`, `error`).</ResponseField>
+<ResponseField name="last_error" type="string | null">Error message from the last failed run.</ResponseField>
+<ResponseField name="deliver" type="string">Delivery channel for the job's output.</ResponseField>
+<ResponseField name="last_delivery_error" type="string | null">Error from the last delivery attempt, if any.</ResponseField>
+
+<ResponseField name="origin" type="object | null">
+  The platform context where the job was created, or `null` for API-created jobs.
+
+  <Expandable title="Origin fields">
+    <ResponseField name="platform" type="string">Platform name (e.g. `telegram`).</ResponseField>
+    <ResponseField name="chat_id" type="string">Chat or channel ID.</ResponseField>
+    <ResponseField name="chat_name" type="string">Chat or channel display name.</ResponseField>
+    <ResponseField name="thread_id" type="string | null">Thread ID within the chat, or `null`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## List jobs
+
+```
+GET /api/hermes/jobs
+```
+
+Returns all jobs, including disabled ones.
+
+### Query parameters
+
+The client always appends `include_disabled=true`. Omitting it may exclude disabled jobs depending on gateway version.
+
+### Response
+
+```json
+{
+  "jobs": [...]
+}
+```
+
+### Example
+
+```bash
+curl "http://localhost:8648/api/hermes/jobs?include_disabled=true" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Get job
+
+```
+GET /api/hermes/jobs/:id
+```
+
+Returns a single job by ID.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The job ID.
+</ParamField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/jobs/job_abc123 \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Create job
+
+```
+POST /api/hermes/jobs
+```
+
+Creates a new scheduled job.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Display name for the job.
+</ParamField>
+
+<ParamField body="schedule" type="string" required>
+  Cron expression for when the job should run (e.g. `0 9 * * *` for daily at 09:00).
+</ParamField>
+
+<ParamField body="prompt" type="string">
+  Prompt to send to the agent each time the job runs.
+</ParamField>
+
+<ParamField body="deliver" type="string">
+  Delivery destination for the job output (e.g. a Telegram chat ID).
+</ParamField>
+
+<ParamField body="skills" type="string[]">
+  Names of skills to enable for this job's runs.
+</ParamField>
+
+<ParamField body="repeat" type="number">
+  Maximum number of times the job should run. Omit for unlimited.
+</ParamField>
+
+### Response
+
+```json
+{ "job": { ... } }
+```
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/jobs \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Daily briefing",
+    "schedule": "0 8 * * *",
+    "prompt": "Summarize the top AI news from the past 24 hours.",
+    "deliver": "me"
+  }'
+```
+
+---
+
+## Update job
+
+```
+PATCH /api/hermes/jobs/:id
+```
+
+Updates one or more fields on an existing job. All fields are optional.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The job ID to update.
+</ParamField>
+
+### Request body
+
+<ParamField body="name" type="string">New display name.</ParamField>
+<ParamField body="schedule" type="string">New cron expression.</ParamField>
+<ParamField body="prompt" type="string">New prompt text.</ParamField>
+<ParamField body="deliver" type="string">New delivery target.</ParamField>
+<ParamField body="skills" type="string[]">Replace the full skills list.</ParamField>
+<ParamField body="skill" type="string">Set the primary skill (legacy field).</ParamField>
+<ParamField body="repeat" type="number">New repeat limit.</ParamField>
+<ParamField body="enabled" type="boolean">Enable or disable the job without deleting it.</ParamField>
+
+### Example
+
+```bash
+curl -X PATCH http://localhost:8648/api/hermes/jobs/job_abc123 \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false, "schedule": "0 10 * * 1-5"}'
+```
+
+---
+
+## Delete job
+
+```
+DELETE /api/hermes/jobs/:id
+```
+
+Permanently removes a job.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The job ID to delete.
+</ParamField>
+
+### Response
+
+```json
+{ "ok": true }
+```
+
+### Example
+
+```bash
+curl -X DELETE http://localhost:8648/api/hermes/jobs/job_abc123 \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Pause job
+
+```
+POST /api/hermes/jobs/:id/pause
+```
+
+Pauses a job so it no longer runs on schedule. Returns the updated job object.
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/jobs/job_abc123/pause \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Resume job
+
+```
+POST /api/hermes/jobs/:id/resume
+```
+
+Resumes a paused job. Returns the updated job object.
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/jobs/job_abc123/resume \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Trigger immediate run
+
+```
+POST /api/hermes/jobs/:id/run
+```
+
+Runs a job immediately, outside of its regular schedule. Returns the updated job object reflecting the triggered run.
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/jobs/job_abc123/run \
+  -H "Authorization: Bearer <your-token>"
+```

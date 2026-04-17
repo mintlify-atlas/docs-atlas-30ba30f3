@@ -1,0 +1,103 @@
+---
+title: "Dashboard settings reference for Hermes Web UI"
+description: "Configure display preferences, agent behavior, memory limits, session resets, privacy controls, and the API server URL from the Hermes Web UI Settings page."
+---
+
+The Settings page lets you tune how the dashboard looks and behaves, how the agent processes requests, and what data the system stores. Changes are written to `~/.hermes/config.yaml` and take effect immediately without restarting the server.
+
+## Display
+
+These settings control the visual experience inside the chat interface.
+
+<AccordionGroup>
+  <Accordion title="streaming">
+    When enabled, the assistant's reply streams into the chat window token by token as it is generated. Disable this if you prefer to see the full response appear at once.
+  </Accordion>
+  <Accordion title="compact">
+    Reduces spacing between messages and UI elements. Useful on smaller screens or when you want more content visible at once.
+  </Accordion>
+  <Accordion title="show_reasoning">
+    Shows the model's internal chain-of-thought alongside the final answer when the model emits reasoning tokens. Disable to keep the interface clean.
+  </Accordion>
+  <Accordion title="show_cost">
+    Displays the estimated token cost for each message in the chat interface. Requires the selected model to report usage data.
+  </Accordion>
+  <Accordion title="skin">
+    Switches the dashboard's visual theme. The default theme is "Pure Ink" — a monochrome black/white/gray palette.
+  </Accordion>
+</AccordionGroup>
+
+## Agent
+
+These settings control how the agent runs requests against the Hermes gateway.
+
+<AccordionGroup>
+  <Accordion title="max_turns">
+    The maximum number of agentic turns the model may take before a run is forcibly stopped. Lower values reduce runaway usage; higher values allow more complex multi-step tasks.
+  </Accordion>
+  <Accordion title="gateway_timeout">
+    How long (in seconds) the BFF server waits for a response from the upstream Hermes gateway before returning a timeout error.
+  </Accordion>
+  <Accordion title="restart_drain_timeout">
+    How long (in seconds) the gateway waits for in-flight requests to complete before restarting after a config change.
+  </Accordion>
+  <Accordion title="service_tier">
+    Sets the OpenAI service tier for requests (for example, `default` or `flex`). Only applies when using OpenAI-compatible endpoints that honor this field.
+  </Accordion>
+  <Accordion title="tool_use_enforcement">
+    Controls how strictly the agent enforces tool calls. Options depend on the model provider — common values are `auto`, `required`, and `none`.
+  </Accordion>
+</AccordionGroup>
+
+## Memory
+
+Controls what the agent stores between conversations.
+
+<AccordionGroup>
+  <Accordion title="memory_enabled">
+    When enabled, the agent persists a condensed memory of past sessions and injects it into future conversations as context.
+  </Accordion>
+  <Accordion title="user_profile_enabled">
+    When enabled, the agent maintains a user profile (preferences, facts) that is injected into the system prompt.
+  </Accordion>
+  <Accordion title="memory_char_limit">
+    Maximum number of characters stored in the session memory. Older entries are trimmed when this limit is reached.
+  </Accordion>
+  <Accordion title="user_char_limit">
+    Maximum number of characters stored in the user profile. Older profile entries are trimmed when this limit is reached.
+  </Accordion>
+</AccordionGroup>
+
+## Session reset
+
+Defines when chat sessions are automatically cleared.
+
+| Field | Description |
+|---|---|
+| `mode` | Reset trigger: `idle` clears after inactivity, `scheduled` clears at a fixed time each day, `disabled` turns off automatic resets. |
+| `idle_minutes` | Minutes of inactivity before a session is reset. Only applies when `mode` is `idle`. |
+| `at_hour` | Hour of the day (0–23, UTC) at which sessions are reset. Only applies when `mode` is `scheduled`. |
+
+## Privacy
+
+<AccordionGroup>
+  <Accordion title="redact_pii">
+    When enabled, the BFF server attempts to detect and redact personally identifiable information (PII) from messages before they are sent to the upstream model. Enable this when operating in environments with strict data-handling requirements.
+  </Accordion>
+</AccordionGroup>
+
+## API server
+
+The API server field in Settings lets you point the dashboard at a Hermes Web UI server running on a different host or port. This is useful when the server is deployed remotely and you are accessing the dashboard from a different machine.
+
+<Note>
+This URL is saved in your browser's `localStorage`, not on the server. Each browser or device that connects to the dashboard maintains its own API server URL setting.
+</Note>
+
+Enter the full base URL of the server, including the port:
+
+```
+http://my-server.example.com:8648
+```
+
+Leave the field blank to use the default relative URL (same host as the dashboard).

@@ -1,0 +1,92 @@
+---
+title: "Log viewer: filter and search agent and gateway logs"
+description: "Read agent, gateway, and error logs in your browser. Filter by level and file, search by keyword, and scan log entries with HTTP access log highlighting."
+---
+
+The **Logs** page streams structured log entries from Hermes Agent's data directory into your browser. You can switch between log files, narrow entries by severity, and search for specific keywords — all without opening a terminal.
+
+## Selecting a log file
+
+A dropdown at the top of the page lists every log file in the Hermes data directory. Each option shows the file name and its size on disk. The default selection is `agent` — the primary agent log.
+
+Common log files you will find here:
+
+| File | Contents |
+|---|---|
+| `agent` | AI agent activity — tool calls, run lifecycle events, errors |
+| `gateway` | HTTP access log for the Hermes gateway API server |
+| `error` | Aggregated errors from all components |
+
+Changing the selected file immediately fetches the latest entries from that file.
+
+## Filtering by log level
+
+The level dropdown filters entries to a specific severity. The available levels are:
+
+<Tabs>
+  <Tab title="ERROR">
+    Critical failures — exceptions, unhandled rejections, and agent run failures. Error entries are highlighted with a red left border and colored message text.
+  </Tab>
+  <Tab title="WARNING">
+    Non-fatal issues — configuration warnings, retried operations, or degraded state. Warning entries use an amber left border.
+  </Tab>
+  <Tab title="INFO">
+    Normal operational events — session starts, model selections, tool completions.
+  </Tab>
+  <Tab title="DEBUG">
+    Verbose diagnostic output. Enable this when troubleshooting unexpected agent behavior.
+  </Tab>
+</Tabs>
+
+Select **All** (the default) to see every level at once.
+
+## Controlling the number of lines
+
+A third dropdown lets you choose how many of the most recent lines to fetch: 50, 100, 200, or 500. The default is 100. Increasing this is useful when you need to trace an event that happened several minutes ago.
+
+## Searching by keyword
+
+The search input filters the currently loaded entries in the browser without making a new request. It matches against the log message text, the logger name, and the raw log line. The list updates instantly as you type.
+
+<Tip>
+To search for a session ID or run ID, paste it directly into the search box. The viewer will narrow the list to only lines containing that identifier.
+</Tip>
+
+## Reading log entries
+
+Each log entry is displayed on a single row with the following columns:
+
+| Column | Description |
+|---|---|
+| **Time** | `HH:MM:SS` extracted from the timestamp field |
+| **Level** | Severity badge (`ERROR`, `WARNING`, `INFO`, `DEBUG`) color-coded for quick scanning |
+| **Logger** | The component or module that emitted the entry (e.g., `agent.runner`, `gateway`) |
+| **Message** | The log message text |
+
+### HTTP access log highlighting
+
+When the log message matches the pattern of an HTTP access log entry (e.g., `"GET /api/hermes/sessions HTTP/1.1" 200`), the viewer parses it and renders three separate tokens:
+
+- **Method** — bold (e.g., `GET`, `POST`)
+- **Path** — highlighted in the accent color
+- **Status code** — colored by class: green for 2xx, amber for 3xx, red for 4xx and 5xx
+
+This makes gateway access logs much easier to scan for error responses.
+
+## Log entry structure
+
+Each parsed entry has the following fields:
+
+```typescript
+interface LogEntry {
+  timestamp: string   // ISO-8601 or structured timestamp from the log file
+  level: string       // "ERROR" | "WARNING" | "INFO" | "DEBUG"
+  logger: string      // component name
+  message: string     // human-readable message
+  raw: string         // original unparsed log line
+}
+```
+
+<Note>
+Log files are read directly from the Hermes data directory by the BFF server. The viewer does not tail the file in real time — click **Refresh** to fetch the latest entries.
+</Note>

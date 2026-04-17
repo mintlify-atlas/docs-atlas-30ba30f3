@@ -1,0 +1,210 @@
+---
+title: "Sessions API — list, read, rename, and delete chats"
+description: "Reference for the Hermes sessions endpoints. List sessions with optional source and limit filters, fetch full message history, rename, and delete sessions."
+---
+
+Session endpoints are local BFF endpoints handled by the Koa server. They wrap the `hermes sessions` CLI to read session data from disk. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## List sessions
+
+```
+GET /api/hermes/sessions
+```
+
+Returns a list of session summaries, optionally filtered by source platform or capped to a maximum count.
+
+### Query parameters
+
+<ParamField query="source" type="string">
+  Filter sessions by source platform (e.g. `telegram`, `discord`, `web`). Omit to return sessions from all sources.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Maximum number of sessions to return. Omit to return all sessions.
+</ParamField>
+
+### Response
+
+```json
+{
+  "sessions": [...]
+}
+```
+
+<ResponseField name="sessions" type="SessionSummary[]">
+  Array of session summary objects.
+
+  <Expandable title="SessionSummary fields">
+    <ResponseField name="id" type="string">Unique session identifier.</ResponseField>
+    <ResponseField name="source" type="string">Platform that originated the session (e.g. `web`, `telegram`).</ResponseField>
+    <ResponseField name="model" type="string">Model used for the session.</ResponseField>
+    <ResponseField name="title" type="string | null">Display title. `null` if the session has not been named.</ResponseField>
+    <ResponseField name="started_at" type="number">Unix timestamp (ms) when the session started.</ResponseField>
+    <ResponseField name="ended_at" type="number | null">Unix timestamp (ms) when the session ended, or `null` if still open.</ResponseField>
+    <ResponseField name="message_count" type="number">Total number of messages in the session.</ResponseField>
+    <ResponseField name="tool_call_count" type="number">Number of tool calls made during the session.</ResponseField>
+    <ResponseField name="input_tokens" type="number">Total input tokens consumed.</ResponseField>
+    <ResponseField name="output_tokens" type="number">Total output tokens generated.</ResponseField>
+    <ResponseField name="cache_read_tokens" type="number">Tokens read from the prompt cache.</ResponseField>
+    <ResponseField name="cache_write_tokens" type="number">Tokens written to the prompt cache.</ResponseField>
+    <ResponseField name="reasoning_tokens" type="number">Tokens used for extended reasoning (where supported).</ResponseField>
+    <ResponseField name="billing_provider" type="string | null">The billing provider identifier, or `null` if unknown.</ResponseField>
+    <ResponseField name="estimated_cost_usd" type="number">Estimated cost in USD based on token counts.</ResponseField>
+    <ResponseField name="actual_cost_usd" type="number | null">Actual billed cost, if reported by the provider.</ResponseField>
+    <ResponseField name="cost_status" type="string">Cost reconciliation status (e.g. `estimated`, `actual`).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/sessions?source=web&limit=20 \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Get session detail
+
+```
+GET /api/hermes/sessions/:id
+```
+
+Returns a single session including its full message history.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The session ID.
+</ParamField>
+
+### Response
+
+```json
+{
+  "session": { ... }
+}
+```
+
+<ResponseField name="session" type="SessionDetail">
+  All `SessionSummary` fields plus:
+
+  <Expandable title="Additional fields">
+    <ResponseField name="messages" type="HermesMessage[]">
+      Ordered list of messages in the session.
+
+      <Expandable title="HermesMessage fields">
+        <ResponseField name="id" type="number">Message row ID.</ResponseField>
+        <ResponseField name="session_id" type="string">Parent session ID.</ResponseField>
+        <ResponseField name="role" type="'user' | 'assistant' | 'system' | 'tool'">Message role.</ResponseField>
+        <ResponseField name="content" type="string">Message content.</ResponseField>
+        <ResponseField name="tool_call_id" type="string | null">ID of the tool call this message responds to, if applicable.</ResponseField>
+        <ResponseField name="tool_calls" type="any[] | null">Tool calls requested by the model, if any.</ResponseField>
+        <ResponseField name="tool_name" type="string | null">Name of the tool invoked, for tool-role messages.</ResponseField>
+        <ResponseField name="timestamp" type="number">Unix timestamp (ms) when the message was created.</ResponseField>
+        <ResponseField name="token_count" type="number | null">Token count for this message, if available.</ResponseField>
+        <ResponseField name="finish_reason" type="string | null">Stop reason from the model (e.g. `stop`, `tool_calls`).</ResponseField>
+        <ResponseField name="reasoning" type="string | null">Extended reasoning text, if the model produced it.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing or invalid token |
+| `404` | Session not found |
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/sessions/sess_abc123 \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Delete session
+
+```
+DELETE /api/hermes/sessions/:id
+```
+
+Permanently deletes a session and all its messages.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The session ID to delete.
+</ParamField>
+
+### Response
+
+```json
+{ "ok": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing or invalid token |
+| `500` | Delete failed (e.g. session not found or CLI error) |
+
+### Example
+
+```bash
+curl -X DELETE http://localhost:8648/api/hermes/sessions/sess_abc123 \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Rename session
+
+```
+POST /api/hermes/sessions/:id/rename
+```
+
+Sets a display title for a session.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The session ID to rename.
+</ParamField>
+
+### Request body
+
+<ParamField body="title" type="string" required>
+  The new display title for the session.
+</ParamField>
+
+### Response
+
+```json
+{ "ok": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | `title` is missing from the request body |
+| `401` | Missing or invalid token |
+| `500` | Rename failed |
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/sessions/sess_abc123/rename \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Project planning discussion"}'
+```

@@ -1,97 +1,71 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Hermes Web UI: AI agent dashboard for every platform"
+description: "Hermes Web UI is a web dashboard for Hermes Agent. Manage AI chat sessions, configure Telegram, Discord, Slack, and five other platform channels, and monitor usage."
 ---
 
-## Setting up
+Hermes Web UI gives you a clean, responsive browser interface for [Hermes Agent](https://github.com/EKKOLearnAI/hermes-web-ui) — the multi-platform AI assistant. From one dashboard you can hold conversations, connect Telegram, Discord, Slack, WhatsApp and five other messaging platforms, set up scheduled AI tasks, and track token usage and costs over time.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install via npm and open the dashboard in under a minute
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="AI Chat" icon="message" href="/features/chat">
+    Real-time streaming chat with multi-session management
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Platform Channels" icon="plug" href="/features/channels">
+    Connect Telegram, Discord, Slack, WhatsApp, and more
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Scheduled Jobs" icon="clock" href="/features/scheduled-jobs">
+    Automate AI tasks with cron expressions and one-click triggers
   </Card>
-</Columns>
+  <Card title="Usage Analytics" icon="chart-bar" href="/features/usage-analytics">
+    Track token usage, costs, and model distribution over 30 days
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Integrate with the BFF server API directly
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## Get up and running
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Install Hermes Web UI">
+    Install globally from npm — no build step required:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    ```bash
+    npm install -g hermes-web-ui
+    ```
+  </Step>
+  <Step title="Start the server">
+    Launch the dashboard server in the background:
 
-## Need inspiration?
+    ```bash
+    hermes-web-ui start
+    ```
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    The server starts on port **8648** by default. Your browser opens automatically with an authentication token pre-filled in the URL.
+  </Step>
+  <Step title="Connect your AI agent">
+    Hermes Web UI proxies to a running Hermes Agent gateway on `localhost:8642`. If the gateway is not running, the dashboard starts it automatically on first launch.
+  </Step>
+  <Step title="Start chatting">
+    Navigate to the **Chat** tab in the sidebar. Select a model from the global model picker and send your first message. Sessions are saved automatically and can be renamed, grouped, or deleted at any time.
+  </Step>
+</Steps>
+
+## What's included
+
+<CardGroup cols={2}>
+  <Card title="Model management" icon="brain" href="/features/models">
+    Auto-discover models from your credential pool and add custom OpenAI-compatible providers
+  </Card>
+  <Card title="Skills & memory" icon="book" href="/features/skills-memory">
+    Browse installed skills, view attached files, and manage agent memory and user profiles
+  </Card>
+  <Card title="Log viewer" icon="file-lines" href="/features/logs">
+    Filter agent, gateway, and error logs by level, file, and keyword
+  </Card>
+  <Card title="Web terminal" icon="terminal" href="/features/terminal">
+    Run shell commands in the browser with full PTY support and multi-session tabs
+  </Card>
+</CardGroup>

@@ -1,0 +1,81 @@
+---
+title: "Authentication and token management in Hermes Web UI"
+description: "Learn how Hermes Web UI generates and uses auth tokens, how to log in, how to pass tokens via header or URL, and how to disable auth for local use."
+---
+
+Hermes Web UI uses token-based authentication to protect the dashboard and its API. On first start, the server automatically generates a secure random token and saves it to disk — you do not need to configure anything to get started.
+
+## How the token works
+
+When the server starts for the first time, it generates a 64-character hex token and stores it at `~/.hermes-web-ui/.token` (readable only by the owner, mode `0600`). On subsequent starts the same token is reused.
+
+The token appears in the browser URL immediately after login:
+
+```
+http://localhost:8648/#/?token=<your-token>
+```
+
+The dashboard stores this token in `localStorage` so you stay logged in across page refreshes. If you open the dashboard on a new browser or device, you need to supply the token again by navigating to that URL or entering it on the login page.
+
+## Logging in
+
+When you open `http://localhost:8648` in a browser, the login page appears. Enter the token shown in the server's startup log or copy the full URL including `?token=` from a session that is already authenticated.
+
+<Tip>
+The server prints the token to the console on startup: look for a line beginning with `Auth enabled — token:`.
+</Tip>
+
+## Using the token in API requests
+
+For direct API access (curl, scripts, or other HTTP clients), pass the token as a Bearer token in the `Authorization` header:
+
+```bash
+curl http://localhost:8648/api/hermes/sessions \
+  -H "Authorization: Bearer <your-token>"
+```
+
+Alternatively, append it as a query parameter — this is required for endpoints that use `EventSource` or WebSocket connections, since those browser APIs do not support custom headers:
+
+```
+http://localhost:8648/api/hermes/v1/runs/<id>/events?token=<your-token>
+```
+
+## Setting a custom token
+
+If you want to use a fixed, human-readable token instead of the auto-generated one, set the `AUTH_TOKEN` environment variable before starting the server:
+
+```bash
+AUTH_TOKEN=my-secret-token hermes-web-ui start
+```
+
+The server uses this value instead of reading or creating the `.token` file.
+
+## Disabling authentication
+
+For local-only use where you do not want any access control, set `AUTH_DISABLED=1`:
+
+```bash
+AUTH_DISABLED=1 hermes-web-ui start
+```
+
+<Warning>
+Disabling auth exposes the dashboard — and everything the agent can do — to anyone who can reach port 8648. Only use this on a machine that is not accessible from the network.
+</Warning>
+
+When auth is disabled, the login page is skipped and all API requests are accepted without a token.
+
+## Troubleshooting 401 responses
+
+A `401 Unauthorized` response means the token was missing or did not match the one the server expects.
+
+<AccordionGroup>
+  <Accordion title="The dashboard shows a 401 error">
+    Your stored token is stale or was cleared. Navigate to the full login URL including `?token=`, or restart the server and check the startup log for the current token.
+  </Accordion>
+  <Accordion title="API requests return 401">
+    Confirm that the `Authorization: Bearer` header is present and that the token value exactly matches what is in `~/.hermes-web-ui/.token`. Trailing newlines or extra whitespace will cause a mismatch.
+  </Accordion>
+  <Accordion title="The token changed unexpectedly">
+    This can happen if the `.token` file was deleted (for example, during a system wipe). The server generates a new token on next start. Check the startup log for the new value.
+  </Accordion>
+</AccordionGroup>

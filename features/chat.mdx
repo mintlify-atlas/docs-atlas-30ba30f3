@@ -1,0 +1,111 @@
+---
+title: "AI Chat: Session Management, Streaming, and Models"
+description: "Stream responses in real time, manage multi-platform chat sessions, upload files, inspect tool call results, and switch models — all from one chat view."
+---
+
+The Chat view is your primary workspace for interacting with Hermes Agent. Messages stream back token by token via Server-Sent Events (SSE), sessions are organized by source platform, and every conversation is preserved so you can switch between them freely.
+
+## Starting a conversation
+
+Open the sidebar and select **Chat**. If no sessions exist yet, the panel shows an empty state prompt. Type your message in the input box at the bottom and press **Enter** (or the send button) to begin. A new session is created automatically.
+
+<Steps>
+  <Step title="Type your message">
+    Enter text in the input field at the bottom of the chat panel. You can also attach files using the upload button to include documents or images in your message.
+  </Step>
+  <Step title="Send and watch the response stream">
+    As soon as you send, Hermes Agent receives your input and begins streaming its reply. Tokens appear progressively — you do not need to wait for the full response before reading it.
+  </Step>
+  <Step title="Expand tool call details">
+    If the agent invokes a tool during its response, a collapsible row appears in the message thread. Click it to reveal the tool name, the exact arguments passed, and the result returned.
+  </Step>
+</Steps>
+
+<Note>
+  File uploads are forwarded to the `/upload` endpoint and included in the run request. Supported file types depend on the underlying model's capabilities.
+</Note>
+
+## Managing sessions
+
+Every conversation belongs to a session. The left panel lists all sessions and groups them by the platform they originated from — for example, **Telegram**, **Discord**, **Slack**, or **web**. Each platform group is a collapsible accordion, so you can focus on just the sessions you care about.
+
+<AccordionGroup>
+  <Accordion title="Creating a session">
+    Click **New Chat** at the top of the session list. A fresh session opens immediately and is ready to receive messages. The session is assigned to the **web** source by default.
+  </Accordion>
+  <Accordion title="Renaming a session">
+    Hover over any session in the list to reveal the rename icon. Click it, type the new title, and confirm. The updated name persists in the Hermes session store and appears immediately across the UI.
+  </Accordion>
+  <Accordion title="Deleting a session">
+    Hover over a session and click the delete (trash) icon. You are asked to confirm before the session and its entire message history are removed permanently.
+  </Accordion>
+  <Accordion title="Switching sessions">
+    Click any session in the list to load its full message history. The chat panel scrolls to the most recent message automatically.
+  </Accordion>
+</AccordionGroup>
+
+## Selecting a model
+
+A **global model selector** sits at the top of the chat panel. It discovers every model available across your credential pool (sourced from `~/.hermes/auth.json`) and lists them in a dropdown.
+
+<Tabs>
+  <Tab title="Per-session badge">
+    Once a session has been used with a specific model, a small badge appears next to the session title in the list showing which model handled the conversation. This badge is read-only — it reflects the model recorded on the session, not a setting you control here.
+  </Tab>
+  <Tab title="Context token usage">
+    Below the active conversation, a token counter shows how many input and output tokens the current context window has consumed. Use this to gauge when a session is approaching its limit.
+  </Tab>
+</Tabs>
+
+## Message rendering
+
+All assistant messages are rendered as Markdown. Code blocks include syntax highlighting powered by highlight.js and a **copy** button in the top-right corner. Long code snippets do not overflow — they scroll horizontally within their block.
+
+<CardGroup cols={2}>
+  <Card title="Syntax highlighting" icon="code">
+    Language-tagged fenced code blocks are highlighted automatically. The language label appears in the top-left corner of the block.
+  </Card>
+  <Card title="Tool call expansion" icon="wrench">
+    Tool invocations render as a collapsible row. Expand to see the structured arguments object and the raw result returned by the tool.
+  </Card>
+</CardGroup>
+
+## How chat requests are structured
+
+When you send a message the UI constructs a `StartRunRequest` and posts it to `/api/hermes/v1/runs`. Understanding this payload helps when you need to troubleshoot unexpected behavior or build integrations on top of the same API.
+
+```typescript
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+interface StartRunRequest {
+  input: string | ChatMessage[]       // your message text, or a full message array
+  instructions?: string               // system-level instructions for this run
+  conversation_history?: ChatMessage[] // prior turns passed explicitly
+  session_id?: string                 // ties the run to an existing session
+  model?: string                      // overrides the globally selected model
+}
+```
+
+The server returns a `run_id` immediately. The UI then opens an SSE connection to `/api/hermes/v1/runs/{run_id}/events` and begins receiving `RunEvent` objects:
+
+```typescript
+interface RunEvent {
+  event: string       // e.g. "message.delta", "tool.call", "run.completed", "run.failed"
+  run_id?: string
+  delta?: string      // incremental text for streaming messages
+  tool?: string       // tool identifier for tool call events
+  name?: string
+  preview?: string
+  timestamp?: number
+  error?: string      // present on "run.failed"
+}
+```
+
+The SSE connection closes automatically when an event with `event === "run.completed"` or `event === "run.failed"` is received.
+
+<Warning>
+  The `EventSource` API does not support custom request headers. The auth token is therefore passed as a `?token=` query parameter on the SSE URL rather than in an `Authorization` header.
+</Warning>

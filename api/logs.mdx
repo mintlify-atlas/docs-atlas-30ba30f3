@@ -1,0 +1,157 @@
+---
+title: "Logs API — list log files and read filtered entries"
+description: "Reference for the Hermes log endpoints. List available log files by name, then read entries filtered by level, session, keyword count, or timestamp."
+---
+
+Log endpoints are local BFF endpoints that read log files from the Hermes data directory. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## Log file types
+
+The Hermes Agent writes several categories of log files. Common names you will see listed:
+
+| File pattern | Contents |
+|---|---|
+| `agent.log` | Hermes Agent activity, tool calls, model interactions |
+| `gateway.log` | Hermes gateway request/response logs |
+| `error.log` | Errors and exceptions from any component |
+
+Each log file contains structured JSON lines with fields that the server parses into `LogEntry` objects when you read them.
+
+---
+
+## List log files
+
+```
+GET /api/hermes/logs
+```
+
+Returns metadata about all available log files.
+
+### Response
+
+<ResponseField name="files" type="LogFileInfo[]">
+  Metadata for each available log file.
+
+  <Expandable title="LogFileInfo fields">
+    <ResponseField name="name" type="string">Log file name. Use this as the `:file` path parameter to read the file.</ResponseField>
+    <ResponseField name="size" type="string">Human-readable file size (e.g. `1.2 MB`).</ResponseField>
+    <ResponseField name="modified" type="string">Last modified time as a formatted string.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/logs \
+  -H "Authorization: Bearer <your-token>"
+```
+
+```json
+{
+  "files": [
+    { "name": "agent.log", "size": "842 KB", "modified": "2026-04-17 09:32:01" },
+    { "name": "gateway.log", "size": "214 KB", "modified": "2026-04-17 09:31:55" }
+  ]
+}
+```
+
+---
+
+## Read log file
+
+```
+GET /api/hermes/logs/:name
+```
+
+Returns parsed log entries from a single log file. Entries are filtered and limited according to the query parameters you provide.
+
+### Path parameters
+
+<ParamField path="name" type="string" required>
+  Log file name as returned by the list endpoint (e.g. `agent.log`).
+</ParamField>
+
+### Query parameters
+
+<ParamField query="lines" type="integer">
+  Maximum number of entries to return. Defaults to `100`. Set higher to tail more history.
+</ParamField>
+
+<ParamField query="level" type="string">
+  Filter entries by log level. Accepted values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Case-sensitive.
+</ParamField>
+
+<ParamField query="session" type="string">
+  Filter entries by session ID. Returns only entries that reference this session.
+</ParamField>
+
+<ParamField query="since" type="string">
+  Return only entries with a timestamp at or after this value. Accepts ISO 8601 format or a Unix timestamp.
+</ParamField>
+
+### Response
+
+<ResponseField name="entries" type="(LogEntry | null)[]">
+  Parsed log entries. Unparseable lines (e.g. tracebacks, continuation lines) are represented as `null` and are excluded by the client automatically.
+
+  <Expandable title="LogEntry fields">
+    <ResponseField name="timestamp" type="string">ISO 8601 timestamp string from the log line.</ResponseField>
+    <ResponseField name="level" type="string">Log level (e.g. `INFO`, `ERROR`).</ResponseField>
+    <ResponseField name="logger" type="string">Logger name or component that emitted the entry.</ResponseField>
+    <ResponseField name="message" type="string">The log message text.</ResponseField>
+    <ResponseField name="raw" type="string">The original unparsed log line.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing or invalid token |
+| `500` | Failed to read the file (e.g. file not found or parse error) |
+
+### Examples
+
+<CodeGroup>
+
+```bash latest 50 entries
+curl "http://localhost:8648/api/hermes/logs/agent.log?lines=50" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+```bash errors only
+curl "http://localhost:8648/api/hermes/logs/agent.log?level=ERROR&lines=100" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+```bash filter by session
+curl "http://localhost:8648/api/hermes/logs/agent.log?session=sess_abc123" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+</CodeGroup>
+
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2026-04-17T09:30:00.000Z",
+      "level": "INFO",
+      "logger": "hermes.agent",
+      "message": "Run started: run_abc123",
+      "raw": "2026-04-17 09:30:00 INFO hermes.agent Run started: run_abc123"
+    },
+    {
+      "timestamp": "2026-04-17T09:30:05.123Z",
+      "level": "ERROR",
+      "logger": "hermes.tools",
+      "message": "Tool call failed: timeout after 30s",
+      "raw": "2026-04-17 09:30:05 ERROR hermes.tools Tool call failed: timeout after 30s"
+    }
+  ]
+}
+```

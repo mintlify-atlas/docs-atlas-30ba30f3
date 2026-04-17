@@ -1,0 +1,78 @@
+---
+title: "Environment variables reference for Hermes Web UI"
+description: "Configure Hermes Web UI's port, auth token, auth enforcement, and upstream gateway URL using environment variables at server startup."
+---
+
+Hermes Web UI is configured through environment variables passed at startup, not through a `.env` file. Set them in your shell, your process manager, or your init script before running `hermes-web-ui start`.
+
+```bash
+# Example: start on a custom port with a fixed token
+PORT=9000 AUTH_TOKEN=my-secret hermes-web-ui start
+```
+
+## Variables
+
+<AccordionGroup>
+  <Accordion title="PORT">
+    **Default:** `8648`
+
+    The port the BFF server listens on. Change this if port 8648 is already in use on your system.
+
+    ```bash
+    PORT=9000 hermes-web-ui start
+    ```
+
+    After changing the port, update any bookmarks or API clients to use the new address: `http://localhost:9000`.
+  </Accordion>
+
+  <Accordion title="UPSTREAM">
+    **Default:** `http://127.0.0.1:8642`
+
+    The URL of the Hermes gateway that the BFF server proxies requests to. Set this when the Hermes gateway is running on a different host or port than the default.
+
+    ```bash
+    UPSTREAM=http://192.168.1.50:8642 hermes-web-ui start
+    ```
+
+    This is the only variable you need to change if you are running the gateway on a separate machine from the web UI.
+  </Accordion>
+
+  <Accordion title="AUTH_TOKEN">
+    **Default:** auto-generated and stored in `~/.hermes-web-ui/data/.token`
+
+    Sets a fixed authentication token instead of using the auto-generated one. Useful when you want a predictable token for scripting or when deploying to an environment where you cannot read the data directory.
+
+    ```bash
+    AUTH_TOKEN=my-secret-token hermes-web-ui start
+    ```
+
+    When this variable is set, the `.token` file is ignored entirely.
+  </Accordion>
+
+  <Accordion title="AUTH_DISABLED">
+    **Default:** not set (auth is enabled)
+
+    Set to `1` to disable authentication entirely. The login page is skipped and all API requests are accepted without a token.
+
+    ```bash
+    AUTH_DISABLED=1 hermes-web-ui start
+    ```
+
+    <Warning>
+      Only disable auth on machines that are not reachable from the network. Any user who can reach the port will have full access to the dashboard and the agent.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Quick reference
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8648` | Server listen port |
+| `UPSTREAM` | `http://127.0.0.1:8642` | Hermes gateway URL |
+| `AUTH_TOKEN` | _(auto-generated)_ | Fixed auth token |
+| `AUTH_DISABLED` | _(not set)_ | Set to `1` to disable auth |
+
+<Note>
+These variables are read at process startup. Changing them requires restarting the server with `hermes-web-ui restart`.
+</Note>

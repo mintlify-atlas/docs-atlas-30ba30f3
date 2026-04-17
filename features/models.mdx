@@ -1,0 +1,119 @@
+---
+title: "Model management: discover and configure AI providers"
+description: "Auto-discover models from your credential pool, query live model lists per provider, and add custom OpenAI-compatible endpoints — no config edits needed."
+---
+
+The **Models** page is your central place to see every AI model available to Hermes Agent. On load it reads `~/.hermes/auth.json`, queries each provider's `/v1/models` endpoint, and presents the results grouped by provider. You can also register custom OpenAI-compatible backends that are not in the credential pool.
+
+## How model discovery works
+
+Hermes Web UI calls two separate sources to build the models list:
+
+- **Credential pool** (`~/.hermes/auth.json`) — each key in the pool maps to a known provider. The dashboard fetches live model lists from each provider's `/v1/models` endpoint and groups them by provider name.
+- **Config models** (`~/.hermes/config.yaml`) — the currently configured default model and any custom providers you have added previously.
+
+The page merges both sources and displays a **Providers** panel where each card represents one provider and lists its available models.
+
+<Note>
+If a provider's `/v1/models` endpoint is unreachable, its card still appears but the model list may be empty or show only the configured model.
+</Note>
+
+## Browsing providers and models
+
+Each provider card shows:
+
+- The **provider name** (e.g., `openai`, `subrouter.ai`)
+- The **base URL** for that provider's API
+- The full list of model IDs available under that provider
+
+Models are grouped so you can quickly see which provider offers which capabilities. The current default model is highlighted at the top of the page.
+
+## Changing the default model
+
+The global model selector in the top navigation bar reflects whichever model is set as default. To change it:
+
+<Steps>
+  <Step title="Open the Models page">
+    Click **Models** in the sidebar. The page loads your current providers and highlights the active default model.
+  </Step>
+  <Step title="Select a model">
+    Click any model name in a provider card. The dashboard sends a `PUT /api/hermes/config/model` request to update `~/.hermes/config.yaml` and the global model selector updates immediately.
+  </Step>
+</Steps>
+
+## Adding a custom provider
+
+You can register any OpenAI-compatible API endpoint that is not already in your credential pool.
+
+<Steps>
+  <Step title="Click Add provider">
+    Click the **Add provider** button in the top-right corner of the Models page. A modal form opens.
+  </Step>
+  <Step title="Fill in the provider details">
+    Complete all four fields in the form:
+
+    | Field | Description |
+    |---|---|
+    | **Name** | A unique identifier for this provider (e.g., `my-proxy`) |
+    | **Base URL** | The root URL of the OpenAI-compatible API (e.g., `https://api.example.com`) |
+    | **API key** | The authentication key for the endpoint |
+    | **Model** | The model ID to use with this provider (e.g., `gpt-4o`) |
+  </Step>
+  <Step title="Save the provider">
+    Click **Save**. The dashboard posts the new entry to `/api/hermes/config/providers` and refreshes the providers list. Your custom provider appears as its own card alongside the auto-discovered ones.
+  </Step>
+</Steps>
+
+<Tip>
+Custom providers are stored in `~/.hermes/config.yaml`. They persist across restarts and are immediately available for selection in the global model picker.
+</Tip>
+
+## Removing a custom provider
+
+To delete a custom provider, click the **remove** icon on its provider card. The dashboard sends a `DELETE /api/hermes/config/providers/{name}` request and removes the card from the list.
+
+<Warning>
+Removing a custom provider also removes its credentials from `~/.hermes/config.yaml`. If it was the active default model, you should select a new default before removing it.
+</Warning>
+
+## Provider data structure
+
+The following TypeScript types describe what the API returns:
+
+<CodeGroup>
+
+```typescript ConfigModelsResponse
+interface ConfigModelsResponse {
+  default: string      // currently active model ID
+  groups: {
+    provider: string   // provider key
+    models: {
+      id: string       // model ID
+      label: string    // display name
+    }[]
+  }[]
+}
+```
+
+```typescript AvailableModelsResponse
+interface AvailableModelsResponse {
+  default: string      // currently active model ID
+  groups: {
+    provider: string   // credential pool key (e.g. "zai", "custom:subrouter.ai")
+    label: string      // display name (e.g. "subrouter.ai")
+    base_url: string   // provider API root
+    models: string[]   // available model IDs
+  }[]
+}
+```
+
+```typescript CustomProvider
+interface CustomProvider {
+  name: string         // unique identifier
+  base_url: string     // OpenAI-compatible API root
+  api_key: string      // authentication key
+  model: string        // model ID to register
+}
+```
+
+</CodeGroup>

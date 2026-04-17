@@ -1,0 +1,206 @@
+---
+title: "Chat API — start runs and stream real-time events"
+description: "Reference for Hermes chat endpoints. Start a run with POST /v1/runs, stream the response via SSE, and list available models from the upstream gateway."
+---
+
+Chat endpoints are proxied through the BFF to the upstream Hermes Agent gateway. The BFF forwards requests from `/api/hermes/v1/*` to `/v1/*` on the gateway, injecting your bearer token automatically.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## Start a run
+
+```
+POST /api/hermes/v1/runs
+```
+
+Sends a message to the agent and returns a `run_id` you can use to stream the response.
+
+### Request body
+
+<ParamField body="input" type="string | ChatMessage[]" required>
+  The user message. Pass a plain string for simple prompts, or an array of `ChatMessage` objects to provide a structured conversation.
+
+  <Expandable title="ChatMessage fields">
+    <ResponseField name="role" type="'user' | 'assistant' | 'system'">Message role.</ResponseField>
+    <ResponseField name="content" type="string">Message content.</ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="instructions" type="string">
+  Optional system-level instructions to override the agent's default behavior for this run.
+</ParamField>
+
+<ParamField body="conversation_history" type="ChatMessage[]">
+  Prior messages to include as context. Use this to continue a conversation without relying on session state.
+</ParamField>
+
+<ParamField body="session_id" type="string">
+  Associate this run with an existing session ID for session-aware persistence.
+</ParamField>
+
+<ParamField body="model" type="string">
+  Override the default model for this run (e.g. `gpt-4o`, `claude-opus-4-5`).
+</ParamField>
+
+### Response
+
+<ResponseField name="run_id" type="string">
+  Unique identifier for this run. Pass it to the events endpoint to stream the response.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Initial status of the run (typically `queued` or `running`).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash curl
+curl -X POST http://localhost:8648/api/hermes/v1/runs \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Summarize the key points of the Kyoto Protocol.",
+    "model": "gpt-4o"
+  }'
+```
+
+```bash curl (structured input)
+curl -X POST http://localhost:8648/api/hermes/v1/runs \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      {"role": "user", "content": "What is the capital of France?"},
+      {"role": "assistant", "content": "Paris."},
+      {"role": "user", "content": "And of Germany?"}
+    ]
+  }'
+```
+
+</CodeGroup>
+
+---
+
+## Stream run events
+
+```
+GET /api/hermes/v1/runs/:id/events
+```
+
+Opens a Server-Sent Events (SSE) stream that delivers the agent's response in real time.
+
+<Note>
+`EventSource` does not support custom headers. Pass your token via the `?token=` query parameter instead of the `Authorization` header.
+</Note>
+
+### Query parameters
+
+<ParamField query="token" type="string" required>
+  Your bearer token. Required because `EventSource` does not allow custom headers.
+</ParamField>
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The `run_id` returned by `POST /api/hermes/v1/runs`.
+</ParamField>
+
+### Event format
+
+Each SSE message contains a JSON-encoded `RunEvent` object in its `data` field.
+
+<ResponseField name="event" type="string">
+  Event type. Key values:
+
+  | Value | Meaning |
+  |---|---|
+  | `message.delta` | A chunk of text from the model |
+  | `tool.start` | The model began calling a tool |
+  | `tool.end` | A tool call completed |
+  | `run.completed` | The run finished successfully — the stream closes after this |
+  | `run.failed` | The run encountered an error — the stream closes after this |
+</ResponseField>
+
+<ResponseField name="run_id" type="string">
+  The run ID this event belongs to.
+</ResponseField>
+
+<ResponseField name="delta" type="string">
+  Incremental text for `message.delta` events. Concatenate all deltas to build the full response.
+</ResponseField>
+
+<ResponseField name="tool" type="string">
+  Tool identifier for `tool.start` / `tool.end` events.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Human-readable name of the tool being called.
+</ResponseField>
+
+<ResponseField name="preview" type="string">
+  Short preview of the tool's input or output.
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  Unix timestamp (ms) when the event was emitted.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message for `run.failed` events.
+</ResponseField>
+
+### Example
+
+```bash
+TOKEN=<your-token>
+RUN_ID=<run-id>
+
+curl "http://localhost:8648/api/hermes/v1/runs/${RUN_ID}/events?token=${TOKEN}" \
+  -H "Accept: text/event-stream"
+```
+
+Example event stream output:
+
+```
+data: {"event":"message.delta","run_id":"run_abc","delta":"The Kyoto Protocol "}
+
+data: {"event":"message.delta","run_id":"run_abc","delta":"is an international treaty..."}
+
+data: {"event":"run.completed","run_id":"run_abc","timestamp":1713300000000}
+```
+
+---
+
+## List models (gateway)
+
+```
+GET /api/hermes/v1/models
+```
+
+Returns the list of models available on the upstream Hermes gateway. For config-based and provider-specific model lists, see the [Models](/api/models) page.
+
+### Response
+
+```json
+{
+  "data": [
+    { "id": "gpt-4o" },
+    { "id": "claude-opus-4-5" }
+  ]
+}
+```
+
+<ResponseField name="data" type="object[]">
+  Array of model objects. Each object has an `id` field containing the model identifier.
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/v1/models \
+  -H "Authorization: Bearer <your-token>"
+```

@@ -1,0 +1,126 @@
+{
+  "projectType": "saas",
+  "projectName": "Hermes Web UI",
+  "projectDescription": "A full-featured web dashboard for Hermes Agent that provides multi-platform AI chat, session management, scheduled jobs, usage analytics, channel configuration, and an integrated terminal.",
+  "theme": "luma",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/chat",
+              "features/channels",
+              "features/scheduled-jobs",
+              "features/models",
+              "features/usage-analytics",
+              "features/skills-memory",
+              "features/logs",
+              "features/terminal"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/settings",
+              "configuration/auth",
+              "configuration/environment"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/setup",
+              "development/extending"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/sessions",
+              "api/chat",
+              "api/jobs",
+              "api/models",
+              "api/skills-memory",
+              "api/config",
+              "api/logs",
+              "api/terminal"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time AI chat with SSE streaming and multi-session management",
+    "Multi-platform channel configuration (Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeChat, WeCom)",
+    "Scheduled cron jobs with create/edit/pause/resume/delete",
+    "Usage analytics with token tracking, cost estimation, and 30-day trend charts",
+    "Model management with auto-discovery from credential pool and custom provider support",
+    "Skills & memory browser with user notes and profile management",
+    "Integrated web terminal powered by node-pty and xterm.js",
+    "Structured log viewer with level/file/keyword filtering",
+    "BFF (Backend-for-Frontend) server proxying Hermes Agent gateway",
+    "Internationalization support (English and Chinese)"
+  ],
+  "publicApiSurface": [
+    "GET /health",
+    "GET /api/hermes/sessions",
+    "GET /api/hermes/sessions/:id",
+    "DELETE /api/hermes/sessions/:id",
+    "POST /api/hermes/sessions/:id/rename",
+    "POST /api/hermes/v1/runs",
+    "GET /api/hermes/v1/runs/:id/events (SSE)",
+    "GET /api/hermes/v1/models",
+    "GET /api/hermes/jobs",
+    "POST /api/hermes/jobs",
+    "PATCH /api/hermes/jobs/:id",
+    "DELETE /api/hermes/jobs/:id",
+    "POST /api/hermes/jobs/:id/pause",
+    "POST /api/hermes/jobs/:id/resume",
+    "POST /api/hermes/jobs/:id/run",
+    "GET /api/hermes/config",
+    "PUT /api/hermes/config",
+    "PUT /api/hermes/config/credentials",
+    "GET /api/hermes/config/models",
+    "GET /api/hermes/available-models",
+    "PUT /api/hermes/config/model",
+    "POST /api/hermes/config/providers",
+    "DELETE /api/hermes/config/providers/:name",
+    "GET /api/hermes/skills",
+    "GET /api/hermes/skills/:path",
+    "PUT /api/hermes/skills/toggle",
+    "GET /api/hermes/memory",
+    "POST /api/hermes/memory",
+    "GET /api/hermes/logs",
+    "GET /api/hermes/logs/:file",
+    "WS /api/hermes/terminal",
+    "POST /upload",
+    "POST /webhook"
+  ]
+}

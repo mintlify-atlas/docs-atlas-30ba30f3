@@ -1,0 +1,103 @@
+---
+title: "Local development setup for Hermes Web UI"
+description: "Clone the repository, install dependencies, start the dev servers, and build a production bundle for Hermes Web UI using Node.js and the Hermes CLI."
+---
+
+This guide walks you through getting a local development environment running. The project uses a single `package.json` at the repo root (no workspaces) and starts both the frontend Vite dev server and the Koa BFF server together with one command.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- **Node.js** (LTS recommended) and **npm** installed
+- The **`hermes` CLI** installed and available on your `$PATH` — the server calls `hermes` via `child_process.execFile` for session management, log reading, and gateway control
+
+<Note>
+If `hermes` is not on your `$PATH`, the server will start but operations that invoke the CLI (sessions, logs, gateway restart) will fail at runtime.
+</Note>
+
+## Install
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/EKKOLearnAI/hermes-web-ui.git
+    cd hermes-web-ui
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
+    This installs all frontend and backend dependencies defined in the root `package.json`.
+  </Step>
+  <Step title="Start the development servers">
+    ```bash
+    npm run dev
+    ```
+    This runs both servers concurrently:
+    - **Frontend** (Vite): `http://localhost:5173`
+    - **BFF server** (nodemon + ts-node): `http://localhost:8648`
+
+    The Vite dev server proxies `/api`, `/v1`, `/health`, `/upload`, and `/webhook` to the BFF server at `http://127.0.0.1:8648`, so all API calls work transparently from the frontend dev origin.
+  </Step>
+</Steps>
+
+## Individual server commands
+
+You can start each process independently when you only need to work on one layer:
+
+<Tabs>
+  <Tab title="Frontend only">
+    ```bash
+    npm run dev:client
+    ```
+    Starts the Vite dev server with hot module replacement. Useful when iterating on UI components without touching the backend.
+  </Tab>
+  <Tab title="Backend only">
+    ```bash
+    npm run dev:server
+    ```
+    Starts the Koa server with nodemon watching `packages/server/src`. The server restarts automatically when TypeScript source files change.
+  </Tab>
+</Tabs>
+
+## Build
+
+To produce a production build:
+
+```bash
+npm run build
+```
+
+The build runs three steps in order:
+
+1. **`vue-tsc -b`** — type-checks the Vue 3 frontend
+2. **`vite build`** — bundles the frontend to `dist/client/`
+3. **`tsc -p packages/server/tsconfig.json`** — compiles the server to `dist/server/`
+
+The resulting `dist/` directory is what gets published to npm. Running `hermes-web-ui start` after a global install serves from this directory.
+
+## Project layout
+
+| Path | Contents |
+|---|---|
+| `packages/client/src/` | Vue 3 frontend (views, components, stores, API layer) |
+| `packages/server/src/` | Koa BFF server (routes, services, proxy) |
+| `dist/client/` | Vite production build output |
+| `dist/server/` | tsc server build output |
+| `bin/hermes-web-ui.mjs` | npm bin entry point |
+
+## TypeScript configuration
+
+Both client and server use TypeScript in strict mode. The path alias `@` maps to `packages/client/src`, so imports like `import { request } from '@/api/client'` resolve correctly in both the Vite build and vue-tsc type checking.
+
+## Preview production build
+
+After running `npm run build`, you can preview the built frontend locally:
+
+```bash
+npm run preview
+```
+
+This starts Vite's built-in preview server serving the files from `dist/client/`.

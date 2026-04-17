@@ -1,0 +1,95 @@
+---
+title: "Web terminal: full PTY shell sessions in the browser"
+description: "Run shell commands in Hermes Web UI with a full PTY powered by node-pty and xterm.js — supports multi-session tabs and real-time WebSocket streaming."
+---
+
+The **Terminal** page embeds a fully functional shell in your browser. It is backed by `node-pty` on the server and rendered with `@xterm/xterm` on the client — giving you the same experience as a native terminal, including color output, interactive programs, and proper resize behavior.
+
+## Opening the terminal
+
+Click **Terminal** in the sidebar. The page connects to the terminal WebSocket endpoint at `/api/hermes/terminal` and automatically creates your first shell session. The shell is detected in order: `$SHELL` environment variable, then `/bin/zsh`, `/bin/bash`, and on Windows, `powershell.exe` or `cmd.exe`.
+
+<Note>
+The terminal feature requires `node-pty` to be installed and compiled for your platform. If `node-pty` fails to load, the terminal WebSocket is disabled and the page will not connect. Run `npm rebuild node-pty` inside the `hermes-web-ui` package to recompile it.
+</Note>
+
+## Session management
+
+The left sidebar lists all open terminal sessions. Each session shows:
+
+- A tab title (e.g., `bash #1`)
+- The shell name
+- The time the session was created, or `exited` if the process has ended
+
+### Creating a new session
+
+Click the **+** button in the session sidebar or the **New tab** button in the terminal header. The client sends `{ "type": "create" }` over the WebSocket. The server spawns a new PTY process and responds with a `created` message containing the session ID, PID, and shell name. The new session becomes active immediately.
+
+### Switching between sessions
+
+Click any session in the sidebar list to switch to it. The client sends `{ "type": "switch", "sessionId": "<id>" }` and the server flushes any buffered output that arrived while the session was in the background. Each session maintains its own terminal instance — switching preserves the scroll buffer and cursor position.
+
+### Closing a session
+
+Hover over a session entry to reveal the **×** close button. Clicking it shows a confirmation prompt. On confirm, the client sends `{ "type": "close", "sessionId": "<id>" }`, the server kills the PTY process, and the session is removed from the list. If the closed session was active, the terminal switches to the next available session automatically. If no sessions remain, a new one is created.
+
+<Info>
+On mobile, the session sidebar slides in as an overlay. Tap the grid icon in the terminal header to open it, and tap outside to dismiss it.
+</Info>
+
+## Keyboard input and PTY output
+
+All keyboard input is sent as raw strings directly over the WebSocket. PTY output from the server is also sent as raw strings and written directly to the xterm.js renderer. JSON control messages are distinguished from raw input by their leading `{` byte.
+
+## Window resize
+
+When the terminal container is resized — either by resizing the browser window or by collapsing the session sidebar — the xterm.js `FitAddon` recalculates the terminal dimensions and the client sends a resize message:
+
+```json
+{ "type": "resize", "cols": 220, "rows": 48 }
+```
+
+The server calls `pty.resize(cols, rows)` on the active PTY session, keeping the shell's line wrapping in sync with what you see in the browser.
+
+## WebSocket protocol reference
+
+The terminal uses a single WebSocket at `/api/hermes/terminal`. Authentication is handled via a `?token=` query parameter on the upgrade request.
+
+<Tabs>
+  <Tab title="Client → server">
+
+    | Message | Description |
+    |---|---|
+    | `{ "type": "create" }` | Spawn a new shell session |
+    | `{ "type": "switch", "sessionId": "<id>" }` | Make a session active and flush its buffered output |
+    | `{ "type": "close", "sessionId": "<id>" }` | Kill a session and release its PTY |
+    | `{ "type": "resize", "cols": N, "rows": N }` | Resize the active PTY |
+    | Raw string | Keyboard input forwarded to the active PTY |
+
+  </Tab>
+  <Tab title="Server → client">
+
+    | Message | Description |
+    |---|---|
+    | `{ "type": "created", "id": "<id>", "pid": N, "shell": "<name>" }` | Confirms a new session was spawned |
+    | `{ "type": "switched", "id": "<id>" }` | Confirms the active session changed |
+    | `{ "type": "exited", "id": "<id>", "exitCode": N }` | The PTY process has exited |
+    | `{ "type": "error", "message": "<text>" }` | A server-side error (e.g., failed to spawn shell) |
+    | Raw string | PTY output to write to the active terminal |
+
+  </Tab>
+</Tabs>
+
+## Output buffering
+
+When a session is in the background (not the active session), the server buffers its PTY output in memory. When you switch back to that session, the buffered output is flushed immediately so you do not miss any output. The buffer is capped at 5,000 chunks to prevent unbounded memory growth.
+
+## Authentication
+
+The WebSocket upgrade request is authenticated using the same token as the HTTP API. Pass it as a query parameter:
+
+```
+wss://your-host/api/hermes/terminal?token=<your-token>
+```
+
+If authentication is disabled (`AUTH_DISABLED=1`), the `?token=` parameter is not required.

@@ -1,0 +1,116 @@
+---
+title: "Channels: Configure All 8 Messaging Platform Integrations"
+description: "Connect Hermes Agent to 8 platforms from one page. Credentials write to ~/.hermes/.env, behavior settings to config.yaml, and the gateway restarts on save."
+---
+
+The Channels page gives you a single place to configure every messaging platform that Hermes Agent supports. Credentials are written to `~/.hermes/.env` and channel behavior settings are written to `~/.hermes/config.yaml`. After any change is saved, the gateway restarts automatically to pick up the new configuration — no manual restart needed.
+
+Each platform card shows a **configured** or **unconfigured** status badge so you can see at a glance which integrations are active.
+
+## Supported platforms
+
+<CardGroup cols={2}>
+  <Card title="Telegram" icon="paper-plane">
+    Bot token, mention control, reaction support, and free-response chat mode for open-ended conversations without requiring a mention.
+  </Card>
+  <Card title="Discord" icon="discord">
+    Bot token, mention control, automatic thread creation per reply, reactions, and per-channel allow and ignore lists.
+  </Card>
+  <Card title="Slack" icon="slack">
+    Bot token, mention-only or always-respond mode, and control over whether the bot responds to messages from other bots.
+  </Card>
+  <Card title="WhatsApp" icon="whatsapp">
+    Enable or disable the integration, mention control, and configurable mention pattern matching.
+  </Card>
+  <Card title="Matrix" icon="grid-2x2">
+    Access token, homeserver URL, automatic thread creation, and mention threading in direct message rooms.
+  </Card>
+  <Card title="Feishu (Lark)" icon="bird">
+    App ID and App Secret for Feishu / Lark bots, with mention control to limit when the agent responds.
+  </Card>
+  <Card title="WeChat" icon="message-circle">
+    QR code login flow — scan the code displayed in the browser to authenticate. Credentials are saved automatically on confirmation.
+  </Card>
+  <Card title="WeCom" icon="building-2">
+    Bot ID and Bot Secret for WeCom (WeChat Work) enterprise messaging.
+  </Card>
+</CardGroup>
+
+## Platform settings reference
+
+The table below summarizes every configurable field across all eight platforms.
+
+| Platform | Credential fields | Behavior fields |
+|---|---|---|
+| Telegram | Bot token | Mention-only mode, emoji reactions, free-response chat list |
+| Discord | Bot token | Mention-only mode, auto-thread, emoji reactions, channel allowlist, channel ignorelist |
+| Slack | Bot token | Mention-only mode, respond to bot messages |
+| WhatsApp | _(enable toggle)_ | Mention-only mode, mention pattern |
+| Matrix | Access token, homeserver URL | Auto-thread, DM mention threads |
+| Feishu (Lark) | App ID, App Secret | Mention-only mode |
+| WeChat | _(QR login — see below)_ | _(no additional fields)_ |
+| WeCom | Bot ID, Bot Secret | _(no additional fields)_ |
+
+<Info>
+  Credential fields (tokens, secrets, IDs) are stored in `~/.hermes/.env`. Behavior toggles and lists are stored in `~/.hermes/config.yaml`. The two files are managed separately so you can version-control behavior settings without committing secrets.
+</Info>
+
+## Configuring a platform
+
+The workflow is the same for every platform except WeChat, which uses a QR code login.
+
+<Steps>
+  <Step title="Expand the platform card">
+    On the Channels page, locate the platform you want to configure. Click the card or its expand arrow to open the settings form. The card header shows a status indicator — gray for unconfigured, green for configured.
+  </Step>
+  <Step title="Enter credentials">
+    Fill in the required credential fields (bot token, app ID, access token, etc.). These are transmitted to the BFF server and written to `~/.hermes/.env`.
+  </Step>
+  <Step title="Set behavior options">
+    Toggle mention-only mode, enable reactions, add channels to the allowlist or ignorelist, or enable auto-threading — depending on what the platform supports.
+  </Step>
+  <Step title="Save">
+    Click **Save** on the platform card. The settings are persisted and the gateway restarts in the background. The status badge updates to reflect the new configuration state.
+  </Step>
+</Steps>
+
+## WeChat QR login
+
+WeChat uses a QR code-based authentication flow rather than a static token. This is handled through the Tencent iLink API.
+
+<Steps>
+  <Step title="Open the WeChat card">
+    Expand the WeChat section on the Channels page. The UI fetches a fresh QR code from `/api/hermes/weixin/qrcode` and displays it as an image.
+  </Step>
+  <Step title="Scan with your WeChat app">
+    Open WeChat on your phone, tap the scan icon, and point it at the QR code shown in the browser. Confirm the login prompt on your phone.
+  </Step>
+  <Step title="Wait for confirmation">
+    The browser polls `/api/hermes/weixin/qrcode/status` in the background. Once your phone confirms the login, the status transitions through `wait` → `scaned` → `confirmed`. The UI reflects each stage.
+
+    The possible status values are:
+
+    | Status | Meaning |
+    |---|---|
+    | `wait` | QR code displayed, waiting for scan |
+    | `scaned` | Phone has scanned the code |
+    | `scaned_but_redirect` | Scan detected, awaiting redirect confirmation |
+    | `expired` | QR code expired — refresh to get a new one |
+    | `confirmed` | Login complete |
+  </Step>
+  <Step title="Credentials saved automatically">
+    On confirmation, the account ID, session token, and base URL are sent to `/api/hermes/weixin/save` and written to `~/.hermes/.env`. No manual copy-paste is required.
+  </Step>
+</Steps>
+
+<Warning>
+  QR codes expire after a short window. If the status shows `expired`, click the refresh button on the WeChat card to generate a new code and repeat the scan.
+</Warning>
+
+## Auto gateway restart
+
+Saving any channel configuration triggers an automatic gateway restart. During the restart, in-flight chat requests may time out. Wait a few seconds after saving before sending new messages.
+
+<Note>
+  The gateway restart is handled by the BFF server — you do not need to run any CLI commands manually. Check the Logs page if you need to confirm the restart completed successfully.
+</Note>

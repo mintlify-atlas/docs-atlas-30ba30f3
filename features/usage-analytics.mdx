@@ -1,0 +1,64 @@
+---
+title: "Usage analytics: track token usage, costs, and trends"
+description: "Monitor token consumption by type, estimated costs, cache hit rates, model distribution, and a 30-day daily trend derived from your session history."
+---
+
+The **Usage** page aggregates data from every chat session stored in Hermes Agent and turns it into a set of charts and statistics. You can see at a glance how many tokens your agent has consumed, what it cost, and which models are being used most.
+
+## Summary stat cards
+
+Four stat cards appear at the top of the page. Each is computed from all sessions in your history:
+
+<CardGroup cols={2}>
+  <Card title="Total tokens" icon="circle-nodes">
+    Breakdown of **input**, **output**, **reasoning**, and **cached** tokens consumed across all sessions. Cache tokens are split further into read and write.
+  </Card>
+  <Card title="Session count" icon="comments">
+    Total number of recorded sessions plus a **daily average** calculated over the span of your session history.
+  </Card>
+  <Card title="Estimated cost" icon="dollar-sign">
+    Cumulative estimated cost in USD derived from `estimated_cost_usd` values stored per session. Actual billing depends on your provider.
+  </Card>
+  <Card title="Cache hit rate" icon="bolt">
+    Ratio of `cache_read_tokens` to total input tokens, expressed as a percentage. A higher rate means more prompts are being served from the provider cache.
+  </Card>
+</CardGroup>
+
+<Info>
+All figures are recalculated live from session data each time you open or refresh the Usage page. Click **Refresh** in the top-right corner to pull in the latest sessions.
+</Info>
+
+## Model usage distribution
+
+Below the stat cards, a **model breakdown** chart shows what share of your total sessions used each model. Each segment is labelled with the model name and its percentage. This view is useful for understanding which models drive the most activity when you use multiple providers.
+
+The breakdown is grouped by `billing_provider` — the provider that was charged for the session — so sessions billed through a proxy are attributed to the upstream provider.
+
+## 30-day daily trend
+
+The daily trend section shows token consumption and cost for each of the last 30 calendar days. It has two parts:
+
+- **Bar chart** — stacked bars where each day shows input and output tokens side by side, making it easy to spot spikes or idle periods.
+- **Data table** — the same figures in tabular form with columns for date, input tokens, output tokens, reasoning tokens, cache tokens, session count, and estimated cost.
+
+<Tip>
+Use the data table to export a day's figures manually. Sort by date to identify your busiest or most expensive days.
+</Tip>
+
+## Session data fields used
+
+The analytics are built from the `SessionSummary` objects returned by the sessions API. The relevant fields are:
+
+| Field | Type | Description |
+|---|---|---|
+| `input_tokens` | `number` | Tokens in the prompt sent to the model |
+| `output_tokens` | `number` | Tokens in the model's response |
+| `reasoning_tokens` | `number` | Tokens used for chain-of-thought reasoning (models that support it) |
+| `cache_read_tokens` | `number` | Tokens served from the provider's prompt cache |
+| `cache_write_tokens` | `number` | Tokens written into the provider's prompt cache |
+| `estimated_cost_usd` | `number` | Provider-reported cost estimate in US dollars |
+| `billing_provider` | `string` | The provider that was billed for the session |
+
+<Note>
+Sessions that were ended before the agent produced a response may have zero values for output and cost fields. These sessions are still counted in the session total.
+</Note>

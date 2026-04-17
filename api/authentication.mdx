@@ -1,0 +1,86 @@
+---
+title: "Authentication — bearer tokens and SSE query params"
+description: "How Hermes Web UI authenticates API requests. Find your token, use the Authorization header for HTTP, and pass ?token= for SSE and WebSocket connections."
+---
+
+Every endpoint on the Hermes Web UI BFF server requires authentication except `/health` and `/webhook`. Authentication uses a static bearer token that is auto-generated when the server starts for the first time.
+
+## Getting your token
+
+When you start Hermes Web UI for the first time, the server generates a random token and prints the dashboard URL with the token embedded:
+
+```
+http://localhost:8648/#/?token=abc123xyz...
+```
+
+Opening that URL stores the token in your browser's `localStorage` automatically. The token is also written to disk at:
+
+```
+~/.hermes-web-ui/.token
+```
+
+You can read it directly from that file if you need it for API calls:
+
+```bash
+cat ~/.hermes-web-ui/.token
+```
+
+<Note>
+If you set the `AUTH_TOKEN` environment variable before starting the server, that value is used as the token instead of the auto-generated one.
+</Note>
+
+## Sending the token
+
+### HTTP requests
+
+Add an `Authorization: Bearer` header to every request:
+
+```bash
+curl http://localhost:8648/api/hermes/sessions \
+  -H "Authorization: Bearer <your-token>"
+```
+
+### SSE streams and WebSocket connections
+
+The browser's `EventSource` API and native WebSocket do not support custom headers. Pass the token as a query parameter instead:
+
+```
+GET /api/hermes/v1/runs/{id}/events?token=<your-token>
+```
+
+```
+ws://localhost:8648/api/hermes/terminal?token=<your-token>
+```
+
+<Warning>
+Query parameters appear in server logs. If your logs are accessible to other users, consider rotating the token periodically via `AUTH_TOKEN`.
+</Warning>
+
+## Disabling authentication
+
+Set `AUTH_DISABLED=1` before starting the server to skip all authentication checks. This is only appropriate for local development where the server is not exposed to other users.
+
+```bash
+AUTH_DISABLED=1 hermes-web-ui start
+```
+
+## Error response
+
+When a request is rejected, the server returns HTTP `401` with a JSON body:
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+The client library (`packages/client/src/api/client.ts`) handles `401` responses by clearing the stored token and redirecting to the login page automatically.
+
+## Example: full authenticated request
+
+```bash
+TOKEN=$(cat ~/.hermes-web-ui/.token)
+
+curl http://localhost:8648/api/hermes/sessions \
+  -H "Authorization: Bearer $TOKEN"
+```

@@ -1,0 +1,245 @@
+---
+title: "Models API — query and manage AI model providers"
+description: "Reference for model endpoints. List config-based models, fetch live models from your providers, set the default model, and add or remove custom providers."
+---
+
+Model management uses a combination of local BFF endpoints (which read/write config files) and gateway-proxied endpoints. All endpoints require a bearer token.
+
+**Base URL:** `http://localhost:8648`
+
+---
+
+## Get model config
+
+```
+GET /api/hermes/config/models
+```
+
+Returns the model configuration stored in the Hermes config file. This reflects what is statically configured, not what models are currently available from the provider.
+
+### Response
+
+<ResponseField name="default" type="string">
+  The model ID currently set as the default (e.g. `gpt-4o`).
+</ResponseField>
+
+<ResponseField name="groups" type="ModelGroup[]">
+  Models organized by provider group.
+
+  <Expandable title="ModelGroup fields">
+    <ResponseField name="provider" type="string">Provider identifier (e.g. `openai`, `anthropic`).</ResponseField>
+    <ResponseField name="models" type="ModelInfo[]">
+      List of models in this group.
+      <Expandable title="ModelInfo fields">
+        <ResponseField name="id" type="string">Model ID used in API calls.</ResponseField>
+        <ResponseField name="label" type="string">Human-readable display label.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/config/models \
+  -H "Authorization: Bearer <your-token>"
+```
+
+```json
+{
+  "default": "gpt-4o",
+  "groups": [
+    {
+      "provider": "openai",
+      "models": [
+        { "id": "gpt-4o", "label": "GPT-4o" },
+        { "id": "gpt-4o-mini", "label": "GPT-4o Mini" }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Fetch available models
+
+```
+GET /api/hermes/available-models
+```
+
+Queries all configured credential pool endpoints in `~/.hermes/auth.json` and returns the live list of models each provider offers. This makes network requests to provider APIs and may take a moment.
+
+### Response
+
+<ResponseField name="default" type="string">
+  The currently active default model ID.
+</ResponseField>
+
+<ResponseField name="groups" type="AvailableModelGroup[]">
+  Models organized by provider, with connection details.
+
+  <Expandable title="AvailableModelGroup fields">
+    <ResponseField name="provider" type="string">Credential pool key (e.g. `zai`, `custom:subrouter.ai`).</ResponseField>
+    <ResponseField name="label" type="string">Display name for the provider (e.g. `subrouter.ai`).</ResponseField>
+    <ResponseField name="base_url" type="string">Base URL for this provider's API.</ResponseField>
+    <ResponseField name="models" type="string[]">List of model IDs available from this provider.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl http://localhost:8648/api/hermes/available-models \
+  -H "Authorization: Bearer <your-token>"
+```
+
+---
+
+## Set default model
+
+```
+PUT /api/hermes/config/model
+```
+
+Updates the default model. Optionally pins a specific provider and base URL.
+
+### Request body
+
+<ParamField body="default" type="string" required>
+  The model ID to set as default (e.g. `claude-opus-4-5`).
+</ParamField>
+
+<ParamField body="provider" type="string">
+  Optional provider key to associate with this model selection.
+</ParamField>
+
+<ParamField body="base_url" type="string">
+  Optional base URL override for the selected provider.
+</ParamField>
+
+<ParamField body="api_key" type="string">
+  Optional API key to store alongside this model configuration.
+</ParamField>
+
+### Response
+
+```json
+{ "success": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | `default` field is missing |
+| `401` | Missing or invalid token |
+| `500` | Failed to write config |
+
+### Example
+
+```bash
+curl -X PUT http://localhost:8648/api/hermes/config/model \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"default": "claude-opus-4-5"}'
+```
+
+---
+
+## Add custom provider
+
+```
+POST /api/hermes/config/providers
+```
+
+Adds a custom OpenAI-compatible provider to the credential pool.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Display name for the provider (e.g. `My Proxy`).
+</ParamField>
+
+<ParamField body="base_url" type="string" required>
+  The provider's API base URL (e.g. `https://api.example.com/v1`).
+</ParamField>
+
+<ParamField body="api_key" type="string" required>
+  API key for authenticating with this provider.
+</ParamField>
+
+<ParamField body="model" type="string" required>
+  The model ID to use with this provider.
+</ParamField>
+
+<ParamField body="providerKey" type="string">
+  Optional credential pool key. Auto-generated from `name` if omitted.
+</ParamField>
+
+### Response
+
+```json
+{ "success": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | Required field (`name`, `base_url`, `api_key`, or `model`) is missing |
+| `401` | Missing or invalid token |
+| `500` | Failed to write config |
+
+### Example
+
+```bash
+curl -X POST http://localhost:8648/api/hermes/config/providers \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "subrouter.ai",
+    "base_url": "https://subrouter.ai/v1",
+    "api_key": "sk-...",
+    "model": "gpt-4o"
+  }'
+```
+
+---
+
+## Remove custom provider
+
+```
+DELETE /api/hermes/config/providers/:poolKey
+```
+
+Removes a provider from the credential pool. You cannot delete the last remaining provider.
+
+### Path parameters
+
+<ParamField path="poolKey" type="string" required>
+  The credential pool key for the provider. URL-encode this value if it contains special characters (e.g. `custom%3Amyprovider` for `custom:myprovider`).
+</ParamField>
+
+### Response
+
+```json
+{ "success": true }
+```
+
+### Error responses
+
+| Status | Meaning |
+|---|---|
+| `400` | Cannot delete the last provider |
+| `401` | Missing or invalid token |
+| `404` | Provider not found |
+| `500` | Failed to delete provider |
+
+### Example
+
+```bash
+curl -X DELETE \
+  "http://localhost:8648/api/hermes/config/providers/custom%3Asubrouter.ai" \
+  -H "Authorization: Bearer <your-token>"
+```
